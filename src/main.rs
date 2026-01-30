@@ -94,6 +94,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_dream(&mut brain, quiet)?;
         }
 
+        Some("map") | Some("mindmap") => {
+            cmd_map(&brain, &args[2..], quiet)?;
+        }
+
         Some("stats") | Some("status") | Some("info") => {
             cmd_stats(&brain, quiet)?;
         }
@@ -615,6 +619,107 @@ fn cmd_dream(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error::E
         println!("\n📖 Dream narrative:");
         println!("  {}", state.dream_narrative);
     }
+    
+    Ok(())
+}
+
+fn cmd_map(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::MindMap;
+    
+    let mut format = "html";
+    let mut output = "memory_map.html";
+    let mut limit = 100;
+    let mut threshold = 0.3;
+    let mut open_browser = false;
+    
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--format" | "-f" => {
+                if i + 1 < args.len() {
+                    format = match args[i + 1].as_str() {
+                        "dot" => "dot",
+                        "mermaid" => "mermaid",
+                        _ => "html",
+                    };
+                    i += 2;
+                    continue;
+                }
+            }
+            "--output" | "-o" => {
+                if i + 1 < args.len() {
+                    output = args[i + 1].as_str();
+                    i += 2;
+                    continue;
+                }
+            }
+            "--limit" | "-n" => {
+                if i + 1 < args.len() {
+                    limit = args[i + 1].parse().unwrap_or(100);
+                    i += 2;
+                    continue;
+                }
+            }
+            "--threshold" | "-t" => {
+                if i + 1 < args.len() {
+                    threshold = args[i + 1].parse().unwrap_or(0.3);
+                    i += 2;
+                    continue;
+                }
+            }
+            "--open" => {
+                open_browser = true;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    
+    if !quiet {
+        println!("🗺️  Generating mind map...");
+    }
+    
+    let map = MindMap::from_brain(brain, limit, threshold);
+    
+    let content = match format {
+        "dot" => {
+            let out = if output == "memory_map.html" { "memory_map.dot" } else { output };
+            let content = map.to_dot();
+            std::fs::write(out, &content)?;
+            if !quiet {
+                println!("✅ DOT file saved to {}", out);
+                println!("   Run: dot -Tpng {} -o map.png", out);
+            }
+            content
+        }
+        "mermaid" => {
+            let out = if output == "memory_map.html" { "memory_map.md" } else { output };
+            let content = format!("```mermaid\n{}\n```", map.to_mermaid());
+            std::fs::write(out, &content)?;
+            if !quiet {
+                println!("✅ Mermaid file saved to {}", out);
+            }
+            content
+        }
+        _ => {
+            let content = map.to_html();
+            std::fs::write(output, &content)?;
+            if !quiet {
+                println!("✅ HTML mind map saved to {}", output);
+                println!("   {} nodes, {} connections", map.nodes.len(), map.edges.len());
+            }
+            
+            if open_browser {
+                #[cfg(target_os = "macos")]
+                std::process::Command::new("open").arg(output).spawn()?;
+                #[cfg(target_os = "linux")]
+                std::process::Command::new("xdg-open").arg(output).spawn()?;
+                #[cfg(target_os = "windows")]
+                std::process::Command::new("start").arg(output).spawn()?;
+            }
+            content
+        }
+    };
     
     Ok(())
 }

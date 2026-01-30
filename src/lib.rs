@@ -30,6 +30,7 @@ pub mod hnsw_index;
 pub mod server;
 pub mod sam;
 pub mod dream;
+pub mod mindmap;
 
 #[cfg(feature = "coredb-backend")]
 pub mod coredb_storage;
@@ -48,6 +49,7 @@ pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
 pub use hnsw_index::{HnswIndex, IndexStats};
 pub use sam::{SamBrain, SamMemory, SamMemoryType, SamBrainStats};
 pub use dream::{DreamEngine, DreamState, DreamPhase};
+pub use mindmap::MindMap;
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
 #[cfg(feature = "coredb-backend")]
