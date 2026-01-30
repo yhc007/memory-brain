@@ -130,6 +130,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_summarize(brain, &args[2..], quiet)?;
         }
 
+        Some("serve") | Some("server") => {
+            return cmd_serve(&args[2..]);
+        }
+
         Some("version") | Some("-v") | Some("--version") => {
             println!("memory-brain v{}", VERSION);
         }
@@ -910,5 +914,57 @@ LLM BACKENDS (auto-detected):
     1. Ollama (local)  - ollama run llama3.2
     2. MLX-LM (local)  - pip install mlx-lm
     3. OpenAI API      - export OPENAI_API_KEY=...
+
+SERVER MODE:
+    memory-brain serve [--host 0.0.0.0] [--port 3030]
+    
+    Endpoints:
+      POST /store   - Store memory (JSON: {{content, tags?, context?}})
+      POST /recall  - Search (JSON: {{query, limit?, use_hnsw?}})
+      POST /batch   - Batch store (JSON: {{memories: [...]}})
+      GET  /stats   - Statistics
+      GET  /health  - Health check
 "#, VERSION);
+}
+
+/// Start HTTP server
+fn cmd_serve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let mut host = "127.0.0.1".to_string();
+    let mut port: u16 = 3030;
+
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--host" | "-h" => {
+                if i + 1 < args.len() {
+                    host = args[i + 1].clone();
+                    i += 2;
+                    continue;
+                }
+            }
+            "--port" | "-p" => {
+                if i + 1 < args.len() {
+                    port = args[i + 1].parse().unwrap_or(3030);
+                    i += 2;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    let db_path = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("memory-brain")
+        .join("brain.db");
+
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async {
+        memory_brain::server::start_server(&host, port, db_path.to_str().unwrap()).await
+    })
 }

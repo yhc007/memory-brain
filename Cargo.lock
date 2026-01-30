@@ -1198,6 +1198,7 @@ dependencies = [
 name = "memory-brain"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "coredb",
  "dirs",
@@ -1214,6 +1215,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-test",
+ "tower-http",
  "uuid",
 ]
 

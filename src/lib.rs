@@ -27,6 +27,7 @@ pub mod llm;
 pub mod audit;
 pub mod cache;
 pub mod hnsw_index;
+pub mod server;
 
 #[cfg(feature = "coredb-backend")]
 pub mod coredb_storage;
