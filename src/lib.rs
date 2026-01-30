@@ -28,6 +28,7 @@ pub mod audit;
 pub mod cache;
 pub mod hnsw_index;
 pub mod inverted_index;
+pub mod bloom_filter;
 pub mod server;
 pub mod sam;
 pub mod dream;
@@ -50,6 +51,7 @@ pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoPr
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
 pub use hnsw_index::{HnswIndex, IndexStats};
 pub use inverted_index::InvertedIndex;
+pub use bloom_filter::{BloomFilter, CountingBloomFilter, BloomStats};
 pub use sam::{SamBrain, SamMemory, SamMemoryType, SamBrainStats};
 pub use dream::{DreamEngine, DreamState, DreamPhase};
 pub use mindmap::MindMap;
@@ -86,6 +88,8 @@ pub struct Brain {
     embedder: Arc<dyn Embedder>,
     /// Inverted index for fast keyword search
     pub keyword_index: InvertedIndex,
+    /// Bloom filter for fast "exists?" checks
+    pub keyword_bloom: BloomFilter,
 }
 
 impl Brain {
@@ -106,6 +110,7 @@ impl Brain {
             forgetting: ForgettingCurve::new(),
             embedder,
             keyword_index: InvertedIndex::new(),
+            keyword_bloom: BloomFilter::new(10000, 0.01), // 10K items, 1% FPR
         })
     }
 
@@ -131,8 +136,16 @@ impl Brain {
 
         // 5. Add to keyword index for fast search
         self.keyword_index.add(memory_item.id, input);
+        
+        // 6. Add keywords to bloom filter for instant "exists?" check
+        for word in input.split_whitespace() {
+            let word = word.trim_matches(|c: char| !c.is_alphanumeric());
+            if word.len() >= 2 {
+                self.keyword_bloom.add_str(word);
+            }
+        }
 
-        // 6. Also store to long-term immediately (for CLI usage where brain is recreated each time)
+        // 7. Also store to long-term immediately (for CLI usage where brain is recreated each time)
         self.consolidate_memory(memory_item)?;
 
         Ok(())
@@ -171,7 +184,13 @@ impl Brain {
                 .map(|w| w.to_string())
                 .collect();
 
-            // 4. Search each keyword in memories (LIKE fallback)
+            // 4. Bloom filter pre-check: skip keywords that definitely don't exist 🌸
+            let keywords: Vec<String> = keywords
+                .into_iter()
+                .filter(|k| self.keyword_bloom.contains_str(k))
+                .collect();
+
+            // 5. Search each keyword in memories (LIKE fallback)
             for keyword in &keywords {
                 if let Ok(episodic) = self.episodic.search(&keyword, limit) {
                     results.extend(episodic);
