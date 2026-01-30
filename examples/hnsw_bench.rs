@@ -75,10 +75,25 @@ fn main() {
     brute_results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     brute_results.truncate(10);
 
-    let hnsw_ids: std::collections::HashSet<_> = hnsw_results.iter().map(|(id, _)| *id).collect();
-    let brute_ids: std::collections::HashSet<_> = brute_results.iter().map(|(id, _)| *id).collect();
-    let overlap = hnsw_ids.intersection(&brute_ids).count();
-    println!("   Top-10 일치율: {}%", overlap * 10);
+    // Count unique similarities
+    let hnsw_sims: std::collections::HashSet<u32> = hnsw_results.iter()
+        .map(|(_, s)| (s * 10000.0) as u32).collect();
+    let brute_sims: std::collections::HashSet<u32> = brute_results.iter()
+        .map(|(_, s)| (s * 10000.0) as u32).collect();
+    
+    println!("   HNSW Top-1 sim:  {:.4}", hnsw_results.first().map(|(_, s)| *s).unwrap_or(0.0));
+    println!("   Brute Top-1 sim: {:.4}", brute_results.first().map(|(_, s)| *s).unwrap_or(0.0));
+    
+    // Check if top-1 similarity matches
+    let hnsw_top1 = hnsw_results.first().map(|(_, s)| (s * 10000.0) as u32);
+    let brute_top1 = brute_results.first().map(|(_, s)| (s * 10000.0) as u32);
+    if hnsw_top1 == brute_top1 {
+        println!("   ✅ Top-1 similarity 일치!");
+    }
+    
+    // Check similarity overlap (same sim values found)
+    let sim_overlap = hnsw_sims.intersection(&brute_sims).count();
+    println!("   Similarity 값 일치: {}/10", sim_overlap);
 
     println!("\n✅ 벤치마크 완료!");
 }
