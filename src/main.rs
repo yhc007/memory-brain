@@ -118,6 +118,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             memory_brain::audit::print_daily_summary();
         }
 
+        Some("rebuild") | Some("reindex") => {
+            cmd_rebuild(&mut brain, quiet)?;
+        }
+
         Some("batch") | Some("b") => {
             cmd_batch(&mut brain, &args[2..], quiet)?;
         }
@@ -604,6 +608,22 @@ fn cmd_stats(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error
     
     if let Ok(meta) = std::fs::metadata(&db_path) {
         println!("  Database Size:   {:.1} KB", meta.len() as f64 / 1024.0);
+    }
+
+    Ok(())
+}
+
+fn cmd_rebuild(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    if !quiet {
+        println!("🔧 Rebuilding indexes from database...");
+    }
+
+    let stats = brain.rebuild_indexes()?;
+
+    if !quiet {
+        println!("{}", stats);
+    } else {
+        println!("{}", stats.index_stats.documents);
     }
 
     Ok(())

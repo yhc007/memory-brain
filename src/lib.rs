@@ -283,4 +283,85 @@ impl Brain {
 
         Ok(())
     }
+
+    /// Rebuild keyword index and bloom filter from existing memories
+    /// 
+    /// Call this after loading a database to populate the in-memory indexes.
+    pub fn rebuild_indexes(&mut self) -> Result<RebuildStats, Box<dyn std::error::Error>> {
+        let mut stats = RebuildStats::default();
+
+        // Clear existing indexes
+        self.keyword_index.clear();
+        self.keyword_bloom.clear();
+
+        // Load all episodic memories
+        if let Ok(items) = self.episodic.search("", 100000) {
+            for item in &items {
+                self.keyword_index.add(item.id, &item.content);
+                for word in item.content.split_whitespace() {
+                    let word = word.trim_matches(|c: char| !c.is_alphanumeric());
+                    if word.len() >= 2 {
+                        self.keyword_bloom.add_str(word);
+                    }
+                }
+            }
+            stats.episodic_count = items.len();
+        }
+
+        // Load all semantic memories
+        if let Ok(items) = self.semantic.search("", 100000) {
+            for item in &items {
+                self.keyword_index.add(item.id, &item.content);
+                for word in item.content.split_whitespace() {
+                    let word = word.trim_matches(|c: char| !c.is_alphanumeric());
+                    if word.len() >= 2 {
+                        self.keyword_bloom.add_str(word);
+                    }
+                }
+            }
+            stats.semantic_count = items.len();
+        }
+
+        // Load all procedural memories
+        if let Ok(items) = self.procedural.search("", 100000) {
+            for item in &items {
+                self.keyword_index.add(item.id, &item.content);
+                for word in item.content.split_whitespace() {
+                    let word = word.trim_matches(|c: char| !c.is_alphanumeric());
+                    if word.len() >= 2 {
+                        self.keyword_bloom.add_str(word);
+                    }
+                }
+            }
+            stats.procedural_count = items.len();
+        }
+
+        stats.index_stats = self.keyword_index.stats();
+        stats.bloom_stats = self.keyword_bloom.stats();
+
+        Ok(stats)
+    }
+}
+
+/// Statistics from rebuild_indexes
+#[derive(Debug, Default)]
+pub struct RebuildStats {
+    pub episodic_count: usize,
+    pub semantic_count: usize,
+    pub procedural_count: usize,
+    pub index_stats: inverted_index::IndexStats,
+    pub bloom_stats: BloomStats,
+}
+
+impl std::fmt::Display for RebuildStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "📊 Rebuild Complete!")?;
+        writeln!(f, "  Episodic:   {} memories", self.episodic_count)?;
+        writeln!(f, "  Semantic:   {} memories", self.semantic_count)?;
+        writeln!(f, "  Procedural: {} memories", self.procedural_count)?;
+        writeln!(f, "  Total:      {} memories", self.episodic_count + self.semantic_count + self.procedural_count)?;
+        writeln!(f, "")?;
+        writeln!(f, "  {}", self.index_stats)?;
+        write!(f, "  {}", self.bloom_stats)
+    }
 }

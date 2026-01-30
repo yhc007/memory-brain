@@ -174,7 +174,7 @@ impl Default for BloomFilter {
 }
 
 /// Bloom filter statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BloomStats {
     pub size: usize,
     pub num_hashes: usize,

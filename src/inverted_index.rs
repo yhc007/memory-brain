@@ -217,7 +217,7 @@ impl Default for InvertedIndex {
 }
 
 /// Index statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct IndexStats {
     pub unique_keywords: usize,
     pub documents: usize,
