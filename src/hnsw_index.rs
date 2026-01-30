@@ -17,7 +17,7 @@ impl Metric<Vec<f32>> for CosineDistance {
     type Unit = u32;
 
     fn distance(&self, a: &Vec<f32>, b: &Vec<f32>) -> Self::Unit {
-        // Cosine similarity = dot(a,b) / (||a|| * ||b||)
+        // Use SIMD-accelerated cosine similarity
         // Cosine distance = 1 - cosine_similarity
         // We scale to u32 for HNSW (0 = identical, u32::MAX = opposite)
         
@@ -25,24 +25,8 @@ impl Metric<Vec<f32>> for CosineDistance {
             return u32::MAX;
         }
 
-        let mut dot = 0.0f32;
-        let mut norm_a = 0.0f32;
-        let mut norm_b = 0.0f32;
-
-        for (x, y) in a.iter().zip(b.iter()) {
-            dot += x * y;
-            norm_a += x * x;
-            norm_b += y * y;
-        }
-
-        let norm_a = norm_a.sqrt();
-        let norm_b = norm_b.sqrt();
-
-        if norm_a == 0.0 || norm_b == 0.0 {
-            return u32::MAX;
-        }
-
-        let cosine_sim = dot / (norm_a * norm_b);
+        let cosine_sim = crate::simd_ops::cosine_similarity_simd(a, b);
+        
         // Convert from [-1, 1] to [0, 2], then scale to u32
         let distance = (1.0 - cosine_sim) / 2.0; // [0, 1]
         (distance * (u32::MAX as f32)) as u32

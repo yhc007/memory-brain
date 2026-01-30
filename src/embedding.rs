@@ -368,20 +368,11 @@ pub fn normalize(vec: &mut [f32]) {
 }
 
 /// Cosine similarity between two vectors
+/// 
+/// Now uses SIMD acceleration (NEON on Apple Silicon, AVX on x86_64)
+#[inline]
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() {
-        return 0.0;
-    }
-    
-    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    
-    if norm_a > 0.0 && norm_b > 0.0 {
-        dot / (norm_a * norm_b)
-    } else {
-        0.0
-    }
+    crate::simd_ops::cosine_similarity_simd(a, b)
 }
 
 #[cfg(test)]
