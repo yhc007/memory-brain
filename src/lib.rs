@@ -27,6 +27,7 @@ pub mod llm;
 pub mod audit;
 pub mod cache;
 pub mod hnsw_index;
+pub mod inverted_index;
 pub mod server;
 pub mod sam;
 pub mod dream;
@@ -48,6 +49,7 @@ pub use glove::GloVeEmbedder;
 pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoProvider, MemoryChat, auto_detect_provider};
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
 pub use hnsw_index::{HnswIndex, IndexStats};
+pub use inverted_index::InvertedIndex;
 pub use sam::{SamBrain, SamMemory, SamMemoryType, SamBrainStats};
 pub use dream::{DreamEngine, DreamState, DreamPhase};
 pub use mindmap::MindMap;
@@ -82,6 +84,8 @@ pub struct Brain {
     consolidator: Consolidator,
     forgetting: ForgettingCurve,
     embedder: Arc<dyn Embedder>,
+    /// Inverted index for fast keyword search
+    pub keyword_index: InvertedIndex,
 }
 
 impl Brain {
@@ -101,6 +105,7 @@ impl Brain {
             consolidator: Consolidator::new(),
             forgetting: ForgettingCurve::new(),
             embedder,
+            keyword_index: InvertedIndex::new(),
         })
     }
 
@@ -124,7 +129,10 @@ impl Brain {
         // 4. Add to working memory
         self.working.push(memory_item.clone());
 
-        // 5. Also store to long-term immediately (for CLI usage where brain is recreated each time)
+        // 5. Add to keyword index for fast search
+        self.keyword_index.add(memory_item.id, input);
+
+        // 6. Also store to long-term immediately (for CLI usage where brain is recreated each time)
         self.consolidate_memory(memory_item)?;
 
         Ok(())
@@ -140,26 +148,41 @@ impl Brain {
         // 1. Check working memory first (fastest)
         results.extend(self.working.search(query));
 
-        // 2. Extract keywords from query for text search
-        let keywords: Vec<String> = query
-            .split_whitespace()
-            .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
-            .filter(|w| w.len() > 2)
-            .filter(|w| !is_stop_word(w))
-            .map(|w| w.to_string())
-            .collect();
-
-        // 3. Search each keyword in memories
-        for keyword in &keywords {
-            if let Ok(episodic) = self.episodic.search(&keyword, limit) {
-                results.extend(episodic);
-            }
-            if let Ok(semantic) = self.semantic.search(&keyword, limit) {
-                results.extend(semantic);
+        // 2. Try inverted index first (O(1) lookup!) 🚀
+        let indexed_ids = self.keyword_index.search_ranked(query, limit * 2);
+        if !indexed_ids.is_empty() {
+            // Fetch memories by IDs from semantic store
+            for (id, _score) in &indexed_ids {
+                if let Ok(items) = self.semantic.search("", 1000) {
+                    if let Some(item) = items.into_iter().find(|i| i.id == *id) {
+                        results.push(item);
+                    }
+                }
             }
         }
 
-        // 4. Also try the full query (for exact matches)
+        // 3. Fallback: Extract keywords for text search (if index is empty/sparse)
+        if results.len() < limit {
+            let keywords: Vec<String> = query
+                .split_whitespace()
+                .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
+                .filter(|w| w.len() > 2)
+                .filter(|w| !is_stop_word(w))
+                .map(|w| w.to_string())
+                .collect();
+
+            // 4. Search each keyword in memories (LIKE fallback)
+            for keyword in &keywords {
+                if let Ok(episodic) = self.episodic.search(&keyword, limit) {
+                    results.extend(episodic);
+                }
+                if let Ok(semantic) = self.semantic.search(&keyword, limit) {
+                    results.extend(semantic);
+                }
+            }
+        }
+
+        // 5. Also try the full query (for exact matches)
         if let Ok(semantic) = self.semantic.search(query, limit) {
             results.extend(semantic);
         }
