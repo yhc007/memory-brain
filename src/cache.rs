@@ -2,12 +2,19 @@
 //!
 //! LRU cache for embeddings to avoid recomputation.
 //! Also supports batch processing for efficiency.
+//!
+//! Features:
+//! - Adaptive cache sizing based on memory pressure
+//! - Disk persistence for cache survival across restarts
+//! - Detailed statistics tracking
 
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::path::Path;
+use std::io::{BufReader, BufWriter};
 
 use crate::embedding::Embedder;
 
@@ -41,15 +48,29 @@ impl<E: Embedder> CachedEmbedder<E> {
         let hits = *self.hits.read().unwrap();
         let misses = *self.misses.read().unwrap();
         let cache = self.cache.read().unwrap();
+        
+        // Calculate memory usage
+        let mut total_bytes = 0usize;
+        let mut count = 0usize;
+        for (_, embedding) in cache.iter() {
+            total_bytes += embedding.len() * std::mem::size_of::<f32>();
+            count += 1;
+        }
+        
+        let avg_size = if count > 0 { total_bytes / count } else { 0 };
+        
         CacheStats {
             hits,
             misses,
             size: cache.len(),
+            capacity: cache.cap().get(),
             hit_rate: if hits + misses > 0 {
                 hits as f64 / (hits + misses) as f64
             } else {
                 0.0
             },
+            memory_bytes: total_bytes,
+            avg_embedding_size: avg_size,
         }
     }
 
@@ -58,6 +79,99 @@ impl<E: Embedder> CachedEmbedder<E> {
         self.cache.write().unwrap().clear();
         *self.hits.write().unwrap() = 0;
         *self.misses.write().unwrap() = 0;
+    }
+
+    /// Resize cache capacity
+    pub fn resize(&self, new_capacity: usize) {
+        let size = NonZeroUsize::new(new_capacity).unwrap_or(NonZeroUsize::new(1000).unwrap());
+        let mut cache = self.cache.write().unwrap();
+        cache.resize(size);
+    }
+
+    /// Adaptive resize based on hit rate
+    /// If hit rate is high (>80%), grow cache
+    /// If hit rate is low (<20%), shrink cache
+    pub fn adaptive_resize(&self) {
+        let stats = self.stats();
+        let current_cap = stats.capacity;
+        
+        if stats.hits + stats.misses < 100 {
+            return; // Not enough data
+        }
+        
+        let new_cap = if stats.hit_rate > 0.8 && current_cap < 100000 {
+            // High hit rate, cache is working well - grow it
+            (current_cap as f64 * 1.5) as usize
+        } else if stats.hit_rate < 0.2 && current_cap > 1000 {
+            // Low hit rate - shrink to save memory
+            (current_cap as f64 * 0.75) as usize
+        } else {
+            return; // No change needed
+        };
+        
+        self.resize(new_cap);
+    }
+
+    /// Save cache to disk for persistence (binary format)
+    pub fn save_to_disk<P: AsRef<Path>>(&self, path: P) -> std::io::Result<usize> {
+        use std::io::Write;
+        
+        let cache = self.cache.read().unwrap();
+        let file = std::fs::File::create(path)?;
+        let mut writer = BufWriter::new(file);
+        
+        let count = cache.len();
+        
+        // Write header: entry count
+        writer.write_all(&(count as u64).to_le_bytes())?;
+        
+        // Write each entry: key (u64) + embedding_len (u32) + embedding data
+        for (&key, embedding) in cache.iter() {
+            writer.write_all(&key.to_le_bytes())?;
+            writer.write_all(&(embedding.len() as u32).to_le_bytes())?;
+            for &val in embedding {
+                writer.write_all(&val.to_le_bytes())?;
+            }
+        }
+        
+        Ok(count)
+    }
+
+    /// Load cache from disk
+    pub fn load_from_disk<P: AsRef<Path>>(&self, path: P) -> std::io::Result<usize> {
+        use std::io::Read;
+        
+        let file = std::fs::File::open(path)?;
+        let mut reader = BufReader::new(file);
+        
+        // Read header
+        let mut count_bytes = [0u8; 8];
+        reader.read_exact(&mut count_bytes)?;
+        let count = u64::from_le_bytes(count_bytes) as usize;
+        
+        let mut cache = self.cache.write().unwrap();
+        
+        // Read entries
+        for _ in 0..count {
+            let mut key_bytes = [0u8; 8];
+            reader.read_exact(&mut key_bytes)?;
+            let key = u64::from_le_bytes(key_bytes);
+            
+            let mut len_bytes = [0u8; 4];
+            reader.read_exact(&mut len_bytes)?;
+            let embedding_len = u32::from_le_bytes(len_bytes) as usize;
+            
+            let mut embedding = Vec::with_capacity(embedding_len);
+            for _ in 0..embedding_len {
+                let mut val_bytes = [0u8; 4];
+                reader.read_exact(&mut val_bytes)?;
+                embedding.push(f32::from_le_bytes(val_bytes));
+            }
+            
+            cache.put(key, embedding);
+        }
+        
+        Ok(count)
     }
 
     /// Hash text for cache key
@@ -151,23 +265,28 @@ impl<E: Embedder> Embedder for CachedEmbedder<E> {
 }
 
 /// Cache statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,
     pub size: usize,
+    pub capacity: usize,
     pub hit_rate: f64,
+    pub memory_bytes: usize,
+    pub avg_embedding_size: usize,
 }
 
 impl std::fmt::Display for CacheStats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Cache: {} entries, {:.1}% hit rate ({} hits, {} misses)",
+            "Cache: {}/{} entries, {:.1}% hit rate ({} hits, {} misses), {:.1} KB",
             self.size,
+            self.capacity,
             self.hit_rate * 100.0,
             self.hits,
-            self.misses
+            self.misses,
+            self.memory_bytes as f64 / 1024.0
         )
     }
 }
@@ -263,5 +382,67 @@ mod tests {
         assert_eq!(stats.hits, 9);
         assert_eq!(stats.misses, 1);
         assert!((stats.hit_rate - 0.9).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_cache_resize() {
+        let inner = HashEmbedder::new(128);
+        let cached = CachedEmbedder::new(inner, 100);
+        
+        for i in 0..50 {
+            cached.embed(&format!("text {}", i));
+        }
+        
+        let stats = cached.stats();
+        assert_eq!(stats.capacity, 100);
+        
+        cached.resize(200);
+        let stats = cached.stats();
+        assert_eq!(stats.capacity, 200);
+        assert_eq!(stats.size, 50); // Data preserved
+    }
+
+    #[test]
+    fn test_cache_persistence() {
+        use std::path::PathBuf;
+        
+        let inner = HashEmbedder::new(64);
+        let cached = CachedEmbedder::new(inner, 100);
+        
+        // Add some embeddings
+        for i in 0..10 {
+            cached.embed(&format!("test text {}", i));
+        }
+        
+        // Save to temp file
+        let path = PathBuf::from("/tmp/test_cache.bin");
+        let saved = cached.save_to_disk(&path).unwrap();
+        assert_eq!(saved, 10);
+        
+        // Create new cache and load
+        let inner2 = HashEmbedder::new(64);
+        let cached2 = CachedEmbedder::new(inner2, 100);
+        
+        let loaded = cached2.load_from_disk(&path).unwrap();
+        assert_eq!(loaded, 10);
+        
+        let stats = cached2.stats();
+        assert_eq!(stats.size, 10);
+        
+        // Cleanup
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn test_detailed_stats() {
+        let inner = HashEmbedder::new(128);
+        let cached = CachedEmbedder::new(inner, 100);
+        
+        cached.embed("hello world");
+        
+        let stats = cached.stats();
+        assert_eq!(stats.size, 1);
+        assert!(stats.memory_bytes > 0);
+        assert_eq!(stats.avg_embedding_size, 128 * 4); // 128 f32s
     }
 }
