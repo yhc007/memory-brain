@@ -28,6 +28,7 @@ pub mod audit;
 pub mod cache;
 pub mod hnsw_index;
 pub mod server;
+pub mod sam;
 
 #[cfg(feature = "coredb-backend")]
 pub mod coredb_storage;
@@ -44,6 +45,7 @@ pub use glove::GloVeEmbedder;
 pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoProvider, MemoryChat, auto_detect_provider};
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
 pub use hnsw_index::{HnswIndex, IndexStats};
+pub use sam::{SamBrain, SamMemory, SamMemoryType, SamBrainStats};
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
 #[cfg(feature = "coredb-backend")]
