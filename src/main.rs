@@ -98,6 +98,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_map(&brain, &args[2..], quiet)?;
         }
 
+        Some("predict") | Some("next") => {
+            cmd_predict(&brain, quiet)?;
+        }
+
+        Some("forget") | Some("forgetting") => {
+            cmd_forgetting(&brain, quiet)?;
+        }
+
+        Some("patterns") => {
+            cmd_patterns(&brain, quiet)?;
+        }
+
         Some("stats") | Some("status") | Some("info") => {
             cmd_stats(&brain, quiet)?;
         }
@@ -618,6 +630,91 @@ fn cmd_dream(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error::E
         
         println!("\n📖 Dream narrative:");
         println!("  {}", state.dream_narrative);
+    }
+    
+    Ok(())
+}
+
+fn cmd_predict(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::Predictor;
+    
+    let predictor = Predictor::new(brain);
+    let predictions = predictor.predict_next(5);
+    
+    if predictions.is_empty() {
+        if !quiet {
+            println!("🔮 패턴이 충분하지 않아 예측하기 어려워");
+        }
+        return Ok(());
+    }
+    
+    if !quiet {
+        println!("🔮 예측:\n");
+        for pred in predictions {
+            let conf_bar = "█".repeat((pred.confidence * 10.0) as usize);
+            let empty_bar = "░".repeat(10 - (pred.confidence * 10.0) as usize);
+            println!("  {} ({:.0}%)", pred.content, pred.confidence * 100.0);
+            println!("  [{}{}] {}\n", conf_bar, empty_bar, pred.reason);
+        }
+    }
+    
+    Ok(())
+}
+
+fn cmd_forgetting(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::Predictor;
+    
+    let predictor = Predictor::new(brain);
+    let alerts = predictor.forgetting_alerts(10);
+    
+    if alerts.is_empty() {
+        if !quiet {
+            println!("✨ 모든 기억이 건강해! 잊혀질 위험 없음");
+        }
+        return Ok(());
+    }
+    
+    if !quiet {
+        println!("⚠️ 잊혀질 위험이 있는 기억들:\n");
+        for alert in alerts {
+            let content = truncate(&alert.memory.content, 40);
+            println!("  {} {} ({}일 전, 강도 {:.0}%)", 
+                alert.urgency,
+                content,
+                alert.days_since_access,
+                alert.strength * 100.0
+            );
+        }
+        println!("\n💡 팁: 이 기억들을 recall해서 강화하세요!");
+    }
+    
+    Ok(())
+}
+
+fn cmd_patterns(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::Predictor;
+    
+    let predictor = Predictor::new(brain);
+    let patterns = predictor.discover_patterns();
+    
+    if patterns.is_empty() {
+        if !quiet {
+            println!("🔍 아직 뚜렷한 패턴이 발견되지 않았어");
+        }
+        return Ok(());
+    }
+    
+    if !quiet {
+        println!("📊 발견된 패턴들:\n");
+        for pattern in patterns {
+            println!("  🔹 {} - {}", pattern.name, pattern.description);
+            if !pattern.examples.is_empty() {
+                for ex in &pattern.examples {
+                    println!("     └ {}", ex);
+                }
+            }
+            println!();
+        }
     }
     
     Ok(())
