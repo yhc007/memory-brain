@@ -27,6 +27,9 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 # LRU cache for embeddings
 lru = "0.12"
 
+# CoreDB backend (optional)
+coredb = { path = "../coredb", optional = true }
+
 # Directory paths
 dirs = "6.0"
 
@@ -36,6 +39,7 @@ mlx-rs = { path = "../MLX/mlx-rs", optional = true }
 [features]
 default = []
 mlx = ["mlx-rs"]
+coredb-backend = ["coredb"]
 
 [dev-dependencies]
 tokio-test = "0.4"

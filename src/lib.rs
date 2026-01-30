@@ -27,6 +27,9 @@ pub mod llm;
 pub mod audit;
 pub mod cache;
 
+#[cfg(feature = "coredb-backend")]
+pub mod coredb_storage;
+
 pub use types::*;
 pub use working::WorkingMemory;
 pub use episodic::EpisodicMemory;
@@ -40,6 +43,8 @@ pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoPr
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
+#[cfg(feature = "coredb-backend")]
+pub use coredb_storage::CoreDBStorage;
 
 use std::sync::Arc;
 
