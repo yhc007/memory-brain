@@ -60,6 +60,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
     };
 
+    // Auto-rebuild indexes for fast search (O(1) keyword lookup)
+    let rebuild_stats = brain.rebuild_indexes()?;
+    if !quiet && rebuild_stats.episodic_count + rebuild_stats.semantic_count > 0 {
+        println!("🔍 Index loaded: {} memories, {} keywords", 
+            rebuild_stats.episodic_count + rebuild_stats.semantic_count + rebuild_stats.procedural_count,
+            rebuild_stats.index_stats.unique_keywords);
+    }
+
     match args.get(1).map(|s| s.as_str()) {
         Some("store") | Some("s") | Some("add") | Some("a") => {
             cmd_store(&mut brain, &args[2..], quiet)?;
