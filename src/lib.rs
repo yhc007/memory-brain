@@ -29,6 +29,7 @@ pub mod cache;
 pub mod hnsw_index;
 pub mod server;
 pub mod sam;
+pub mod dream;
 
 #[cfg(feature = "coredb-backend")]
 pub mod coredb_storage;
@@ -46,6 +47,7 @@ pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoPr
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
 pub use hnsw_index::{HnswIndex, IndexStats};
 pub use sam::{SamBrain, SamMemory, SamMemoryType, SamBrainStats};
+pub use dream::{DreamEngine, DreamState, DreamPhase};
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
 #[cfg(feature = "coredb-backend")]

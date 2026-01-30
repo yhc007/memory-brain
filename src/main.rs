@@ -90,6 +90,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !quiet { println!("😴 Memory consolidation complete"); }
         }
 
+        Some("dream") => {
+            cmd_dream(&mut brain, quiet)?;
+        }
+
         Some("stats") | Some("status") | Some("info") => {
             cmd_stats(&brain, quiet)?;
         }
@@ -586,6 +590,32 @@ fn cmd_stats(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error
         println!("  Database Size:   {:.1} KB", meta.len() as f64 / 1024.0);
     }
 
+    Ok(())
+}
+
+fn cmd_dream(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::DreamEngine;
+    
+    let mut engine = DreamEngine::new(brain).verbose(!quiet);
+    let state = engine.dream();
+    
+    if !quiet {
+        println!("\n🌙 Dream Summary:");
+        println!("  Memories processed: {}", state.memories_processed);
+        println!("  New connections: {}", state.new_connections);
+        println!("  Faded memories: {}", state.faded_memories);
+        
+        if !state.insights.is_empty() {
+            println!("\n💡 Insights:");
+            for insight in &state.insights {
+                println!("  - {}", insight);
+            }
+        }
+        
+        println!("\n📖 Dream narrative:");
+        println!("  {}", state.dream_narrative);
+    }
+    
     Ok(())
 }
 
