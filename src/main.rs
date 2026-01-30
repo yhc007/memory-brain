@@ -122,6 +122,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_rebuild(&mut brain, quiet)?;
         }
 
+        Some("merge") | Some("dedup") => {
+            cmd_merge(&mut brain, &args[2..], quiet)?;
+        }
+
         Some("batch") | Some("b") => {
             cmd_batch(&mut brain, &args[2..], quiet)?;
         }
@@ -624,6 +628,56 @@ fn cmd_rebuild(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error:
         println!("{}", stats);
     } else {
         println!("{}", stats.index_stats.documents);
+    }
+
+    Ok(())
+}
+
+fn cmd_merge(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::merge::{MemoryMerger, MergeConfig};
+    
+    // Parse arguments
+    let mut threshold = 0.85f32;
+    let mut dry_run = true; // Default to dry run for safety
+    
+    for arg in args {
+        if arg.starts_with("--threshold=") {
+            threshold = arg.trim_start_matches("--threshold=")
+                .parse()
+                .unwrap_or(0.85);
+        } else if arg == "--execute" || arg == "-x" {
+            dry_run = false;
+        } else if arg == "--dry-run" || arg == "-n" {
+            dry_run = true;
+        }
+    }
+
+    if !quiet {
+        if dry_run {
+            println!("🔍 Analyzing duplicate memories (dry run)...");
+        } else {
+            println!("🔗 Merging duplicate memories...");
+        }
+        println!("  Threshold: {:.0}%", threshold * 100.0);
+    }
+
+    let config = MergeConfig {
+        similarity_threshold: threshold,
+        dry_run,
+        ..Default::default()
+    };
+
+    let mut merger = MemoryMerger::with_config(brain, config);
+    let result = merger.find_similar();
+
+    if !quiet {
+        println!("{}", result);
+        
+        if dry_run && result.mergeable_count > 0 {
+            println!("\n💡 Run with --execute (-x) to actually merge");
+        }
+    } else {
+        println!("{}", result.merged_count);
     }
 
     Ok(())
