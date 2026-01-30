@@ -26,6 +26,7 @@ pub mod glove;
 pub mod llm;
 pub mod audit;
 pub mod cache;
+pub mod hnsw_index;
 
 #[cfg(feature = "coredb-backend")]
 pub mod coredb_storage;
@@ -41,6 +42,7 @@ pub use embedding::{Embedder, HashEmbedder, TfIdfEmbedder, cosine_similarity};
 pub use glove::GloVeEmbedder;
 pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoProvider, MemoryChat, auto_detect_provider};
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
+pub use hnsw_index::{HnswIndex, IndexStats};
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
 #[cfg(feature = "coredb-backend")]

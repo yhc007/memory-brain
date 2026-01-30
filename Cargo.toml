@@ -15,6 +15,12 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # Vector search (lightweight, pure Rust)
 hora = "0.1"
 
+# HNSW for fast approximate nearest neighbors
+hnsw = "0.11"
+space = "0.17"
+rand = "0.8"
+rand_pcg = "0.3"
+
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
 
