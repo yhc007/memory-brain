@@ -39,6 +39,7 @@ pub mod sam;
 pub mod dream;
 pub mod mindmap;
 pub mod predict;
+pub mod tui;
 
 // coredb_storage merged into storage.rs
 

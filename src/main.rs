@@ -136,6 +136,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        Some("tui") | Some("dashboard") | Some("ui") => {
+            // Load memories for TUI from semantic memory
+            let memory_data: Vec<(String, String, String)> = if let Ok(items) = brain.semantic.search("", 100) {
+                items.iter().map(|m| {
+                    (
+                        m.id.to_string(),
+                        m.content.clone(),
+                        m.tags.join(", "),
+                    )
+                }).collect()
+            } else {
+                Vec::new()
+            };
+            
+            memory_brain::tui::run_tui(memory_data)?;
+        }
+
         Some("rebuild") | Some("reindex") => {
             cmd_rebuild(&mut brain, quiet)?;
         }
