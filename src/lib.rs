@@ -40,6 +40,7 @@ pub mod dream;
 pub mod mindmap;
 pub mod predict;
 pub mod tui;
+pub mod web_ui;
 
 // coredb_storage merged into storage.rs
 

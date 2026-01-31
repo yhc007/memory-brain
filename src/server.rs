@@ -24,9 +24,9 @@ use crate::{Brain, MemoryItem, MemoryType, GloVeEmbedder, HnswIndex, Embedder};
 
 /// Server state
 pub struct AppState {
-    brain: RwLock<Brain>,
-    hnsw: HnswIndex,
-    embedder: Arc<dyn Embedder>,
+    pub brain: RwLock<Brain>,
+    pub hnsw: HnswIndex,
+    pub embedder: Arc<dyn Embedder>,
 }
 
 /// Store request
@@ -97,13 +97,21 @@ pub struct StatsResponse {
 
 /// Create the router
 pub fn create_router(state: Arc<AppState>) -> Router {
-    Router::new()
+    // API routes
+    let api = Router::new()
         .route("/store", post(store_handler))
         .route("/recall", post(recall_handler))
         .route("/batch", post(batch_handler))
         .route("/stats", get(stats_handler))
         .route("/memory/:id", delete(delete_handler))
-        .route("/health", get(health_handler))
+        .route("/health", get(health_handler));
+    
+    // Web UI routes
+    let web = crate::web_ui::create_web_router();
+    
+    Router::new()
+        .nest("/api", api)
+        .merge(web)
         .with_state(state)
 }
 
