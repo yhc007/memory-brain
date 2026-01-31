@@ -288,7 +288,7 @@ mod tests {
     use axum::http::Request;
     use tower::ServiceExt;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_health() {
         let embedder: Arc<dyn Embedder> = Arc::new(GloVeEmbedder::test_embedder());
         let dim = embedder.dimension();

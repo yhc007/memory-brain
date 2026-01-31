@@ -9,8 +9,8 @@ description = "Human brain-inspired memory system for LLMs"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+# Database - CoreDB (Cassandra-style NoSQL)
+coredb = { path = "../coredb" }
 
 # Vector search (lightweight, pure Rust)
 hora = "0.1"
@@ -40,8 +40,7 @@ lru = "0.12"
 # Regex for search
 regex = "1.10"
 
-# CoreDB backend (optional)
-coredb = { path = "../coredb", optional = true }
+# (CoreDB is now required, not optional)
 
 # Directory paths
 dirs = "6.0"
@@ -52,7 +51,6 @@ mlx-rs = { path = "../MLX/mlx-rs", optional = true }
 [features]
 default = []
 mlx = ["mlx-rs"]
-coredb-backend = ["coredb"]
 
 [dev-dependencies]
 tokio-test = "0.4"

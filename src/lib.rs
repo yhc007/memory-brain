@@ -40,8 +40,7 @@ pub mod dream;
 pub mod mindmap;
 pub mod predict;
 
-#[cfg(feature = "coredb-backend")]
-pub mod coredb_storage;
+// coredb_storage merged into storage.rs
 
 pub use types::*;
 pub use working::WorkingMemory;
@@ -66,8 +65,7 @@ pub use mindmap::MindMap;
 pub use predict::{Predictor, Prediction, ForgettingAlert, Pattern};
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
-#[cfg(feature = "coredb-backend")]
-pub use coredb_storage::CoreDBStorage;
+// CoreDBStorage is now the default Storage
 
 use std::sync::Arc;
 

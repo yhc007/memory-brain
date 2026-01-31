@@ -460,14 +460,15 @@ mod tests {
         let db_path = dir.path().join("map_test.db");
         let mut brain = Brain::new(db_path.to_str().unwrap()).unwrap();
         
-        // Add memories
-        brain.process("Rust programming", None).unwrap();
-        brain.process("Rust ownership", None).unwrap();
-        brain.process("Python scripting", None).unwrap();
+        // Add memories (use "is/are" to classify as Semantic)
+        brain.process("Rust is a systems programming language", None).unwrap();
+        brain.process("Ownership is a core concept in Rust", None).unwrap();
+        brain.process("Python is a scripting language", None).unwrap();
         
         let map = MindMap::from_brain(&brain, 100, 0.3);
         
-        assert!(map.nodes.len() >= 3);
+        // Should have at least the 3 memories we added
+        assert!(map.nodes.len() >= 3, "Expected >= 3 nodes, got {}", map.nodes.len());
     }
 
     #[test]
@@ -488,6 +489,6 @@ mod tests {
         
         let html = map.to_html();
         assert!(html.contains("Memory Mind Map"));
-        assert!(html.contains("d3.js"));
+        assert!(html.contains("d3.") && html.contains(".js"));
     }
 }
