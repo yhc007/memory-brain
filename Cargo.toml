@@ -37,6 +37,9 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 # LRU cache for embeddings
 lru = "0.12"
 
+# Regex for search
+regex = "1.10"
+
 # CoreDB backend (optional)
 coredb = { path = "../coredb", optional = true }
 

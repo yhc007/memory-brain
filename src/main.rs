@@ -366,36 +366,151 @@ fn cmd_batch(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box<
 
 fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     if args.is_empty() {
-        eprintln!("Usage: memory-brain recall <query> [--limit N]");
+        eprintln!("Usage: memory-brain recall <query> [options]");
+        eprintln!("Options:");
+        eprintln!("  --limit N, -n N    Max results (default: 5)");
+        eprintln!("  --tag TAG          Filter by tag");
+        eprintln!("  --regex            Use regex matching");
+        eprintln!("  --fuzzy            Fuzzy search (typo tolerant)");
+        eprintln!("  --type TYPE        Filter by type (semantic/episodic/procedural)");
         return Ok(());
     }
 
     let mut limit = 5;
+    let mut tag_filter: Option<String> = None;
+    let mut type_filter: Option<MemoryType> = None;
+    let mut use_regex = false;
+    let mut use_fuzzy = false;
     let mut query_parts: Vec<&str> = Vec::new();
 
     let mut i = 0;
     while i < args.len() {
-        if args[i] == "--limit" || args[i] == "-n" {
-            if i + 1 < args.len() {
-                limit = args[i + 1].parse().unwrap_or(5);
-                i += 2;
+        match args[i].as_str() {
+            "--limit" | "-n" => {
+                if i + 1 < args.len() {
+                    limit = args[i + 1].parse().unwrap_or(5);
+                    i += 2;
+                    continue;
+                }
+            }
+            "--tag" | "-t" => {
+                if i + 1 < args.len() {
+                    tag_filter = Some(args[i + 1].clone());
+                    i += 2;
+                    continue;
+                }
+            }
+            "--type" => {
+                if i + 1 < args.len() {
+                    type_filter = match args[i + 1].to_lowercase().as_str() {
+                        "semantic" | "sem" => Some(MemoryType::Semantic),
+                        "episodic" | "epi" => Some(MemoryType::Episodic),
+                        "procedural" | "proc" => Some(MemoryType::Procedural),
+                        _ => None,
+                    };
+                    i += 2;
+                    continue;
+                }
+            }
+            "--regex" | "-r" => {
+                use_regex = true;
+                i += 1;
                 continue;
             }
+            "--fuzzy" | "-f" => {
+                use_fuzzy = true;
+                i += 1;
+                continue;
+            }
+            s if s.starts_with("--tag=") => {
+                tag_filter = Some(s.trim_start_matches("--tag=").to_string());
+                i += 1;
+                continue;
+            }
+            s if s.starts_with("--type=") => {
+                type_filter = match s.trim_start_matches("--type=").to_lowercase().as_str() {
+                    "semantic" | "sem" => Some(MemoryType::Semantic),
+                    "episodic" | "epi" => Some(MemoryType::Episodic),
+                    "procedural" | "proc" => Some(MemoryType::Procedural),
+                    _ => None,
+                };
+                i += 1;
+                continue;
+            }
+            _ => {}
         }
         query_parts.push(&args[i]);
         i += 1;
     }
 
     let query = query_parts.join(" ");
-    let memories = brain.recall(&query, limit);
+    
+    // Get more results initially for filtering
+    let fetch_limit = if tag_filter.is_some() || type_filter.is_some() || use_regex || use_fuzzy {
+        limit * 10
+    } else {
+        limit
+    };
+    
+    let mut memories = brain.recall(&query, fetch_limit);
+
+    // Apply regex filter
+    if use_regex && !query.is_empty() {
+        if let Ok(re) = regex::Regex::new(&query) {
+            memories.retain(|m| re.is_match(&m.content));
+        }
+    }
+
+    // Apply fuzzy filter
+    if use_fuzzy && !query.is_empty() {
+        let query_lower = query.to_lowercase();
+        let query_chars: Vec<char> = query_lower.chars().collect();
+        
+        memories.retain(|m| {
+            let content_lower = m.content.to_lowercase();
+            // Simple fuzzy: all query chars appear in order
+            fuzzy_match(&query_chars, &content_lower)
+        });
+    }
+
+    // Apply tag filter
+    if let Some(ref tag) = tag_filter {
+        let tag_lower = tag.to_lowercase();
+        memories.retain(|m| m.tags.iter().any(|t| t.to_lowercase().contains(&tag_lower)));
+    }
+
+    // Apply type filter
+    if let Some(ref mem_type) = type_filter {
+        memories.retain(|m| std::mem::discriminant(&m.memory_type) == std::mem::discriminant(mem_type));
+    }
+
+    // Truncate to limit
+    memories.truncate(limit);
 
     // Audit log
     memory_brain::audit::log_recall(&query, memories.len());
 
     if memories.is_empty() {
-        if !quiet { println!("🔍 No memories found for: {}", query); }
+        if !quiet { 
+            println!("🔍 No memories found for: {}", query);
+            if tag_filter.is_some() || type_filter.is_some() || use_regex || use_fuzzy {
+                println!("   (filters applied)");
+            }
+        }
     } else {
-        if !quiet { println!("🧠 Found {} memories:\n", memories.len()); }
+        if !quiet { 
+            print!("🧠 Found {} memories", memories.len());
+            if let Some(ref tag) = tag_filter {
+                print!(" [tag: {}]", tag);
+            }
+            if use_regex {
+                print!(" [regex]");
+            }
+            if use_fuzzy {
+                print!(" [fuzzy]");
+            }
+            println!(":\n");
+        }
         for (i, mem) in memories.iter().enumerate() {
             println!("{}. [{}] {}", i + 1, type_emoji(&mem.memory_type), mem.content);
             println!("   Strength: {:.0}% | Accessed: {} | #{}", 
@@ -411,6 +526,17 @@ fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
     }
 
     Ok(())
+}
+
+/// Simple fuzzy matching - all chars appear in order
+fn fuzzy_match(pattern: &[char], text: &str) -> bool {
+    let mut pattern_idx = 0;
+    for c in text.chars() {
+        if pattern_idx < pattern.len() && c == pattern[pattern_idx] {
+            pattern_idx += 1;
+        }
+    }
+    pattern_idx == pattern.len()
 }
 
 fn cmd_semantic_search(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
