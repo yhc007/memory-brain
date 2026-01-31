@@ -40,6 +40,9 @@ lru = "0.12"
 # Regex for search
 regex = "1.10"
 
+# TUI visualization
+colored = "2.1"
+
 # (CoreDB is now required, not optional)
 
 # Directory paths

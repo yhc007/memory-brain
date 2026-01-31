@@ -136,6 +136,10 @@ impl Storage {
             );
 
             db.execute_cql(&query).await?;
+            
+            // Flush immediately to persist data
+            db.flush_all().await?;
+            
             Ok(())
         })
     }

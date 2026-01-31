@@ -123,7 +123,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Some("audit") => {
-            memory_brain::audit::print_daily_summary();
+            // Check for flags
+            let show_weekly = args.iter().any(|a| a == "--weekly" || a == "-w");
+            let show_simple = args.iter().any(|a| a == "--simple" || a == "-s");
+            
+            if show_simple {
+                memory_brain::audit::print_daily_summary();
+            } else if show_weekly {
+                memory_brain::audit::print_full_report();
+            } else {
+                memory_brain::audit::print_visual_summary();
+            }
         }
 
         Some("rebuild") | Some("reindex") => {
