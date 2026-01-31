@@ -138,6 +138,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_bench(quiet)?;
         }
 
+        Some("watch") | Some("monitor") => {
+            cmd_watch(&brain, &args[2..])?;
+        }
+
         Some("batch") | Some("b") => {
             cmd_batch(&mut brain, &args[2..], quiet)?;
         }
@@ -642,6 +646,34 @@ fn cmd_rebuild(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error:
         println!("{}", stats.index_stats.documents);
     }
 
+    Ok(())
+}
+
+fn cmd_watch(brain: &Brain, args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::watch::{MemoryWatcher, WatchConfig};
+    
+    let mut interval_ms = 1000u64;
+    let mut detailed = false;
+    
+    for arg in args {
+        if arg.starts_with("--interval=") || arg.starts_with("-i=") {
+            interval_ms = arg.split('=').nth(1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1000);
+        } else if arg == "--detailed" || arg == "-d" {
+            detailed = true;
+        }
+    }
+    
+    let config = WatchConfig {
+        interval_ms,
+        detailed,
+        clear_screen: true,
+        max_iterations: 0,
+    };
+    
+    MemoryWatcher::with_config(brain, config).run()?;
+    
     Ok(())
 }
 

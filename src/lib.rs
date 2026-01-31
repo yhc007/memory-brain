@@ -33,6 +33,7 @@ pub mod simd_ops;
 pub mod compression;
 pub mod merge;
 pub mod bench;
+pub mod watch;
 pub mod server;
 pub mod sam;
 pub mod dream;
