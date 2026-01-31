@@ -168,31 +168,76 @@ pub async fn search_page() -> Html<String> {
 #[derive(Deserialize)]
 pub struct SearchForm {
     query: String,
+    #[serde(default)]
+    tags: String,
+    #[serde(default)]
+    from_date: String,
+    #[serde(default)]
+    to_date: String,
+    #[serde(default)]
+    limit: Option<usize>,
 }
 
 pub async fn search_results(
     State(state): State<Arc<AppState>>,
     Form(form): Form<SearchForm>,
 ) -> Html<String> {
-    if form.query.is_empty() {
-        return Html(r#"<div class="text-gray-500 text-center py-8">Enter a search query</div>"#.to_string());
+    if form.query.is_empty() && form.tags.is_empty() {
+        return Html(r#"<div class="text-gray-500 text-center py-8">Enter a search query or select tags</div>"#.to_string());
     }
     
+    let limit = form.limit.unwrap_or(20);
     let mut brain = state.brain.write().await;
-    let memories = brain.recall(&form.query, 20);
     
-    if memories.is_empty() {
+    // 쿼리가 있으면 recall, 없으면 전체에서 필터
+    let memories = if !form.query.is_empty() {
+        brain.recall(&form.query, limit)
+    } else {
+        brain.semantic.search("", limit).unwrap_or_default()
+    };
+    
+    // 태그 필터 적용
+    let tag_filters: Vec<&str> = form.tags
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    
+    let filtered: Vec<_> = memories.into_iter()
+        .filter(|mem| {
+            if tag_filters.is_empty() {
+                true
+            } else {
+                tag_filters.iter().any(|tag| 
+                    mem.tags.iter().any(|t| t.to_lowercase().contains(&tag.to_lowercase()))
+                )
+            }
+        })
+        .take(limit)
+        .collect();
+    
+    if filtered.is_empty() {
+        let filter_info = if !form.tags.is_empty() {
+            format!(" with tags '{}'", form.tags)
+        } else {
+            String::new()
+        };
         return Html(format!(
             r##"<div class="text-center py-12">
                 <div class="text-4xl mb-4">🔍</div>
-                <div class="text-gray-400">No memories found for "{}"</div>
+                <div class="text-gray-400">No memories found for "{}"{}</div>
             </div>"##, 
-            html_escape(&form.query)
+            html_escape(&form.query),
+            filter_info
         ));
     }
     
-    let mut html = String::new();
-    for mem in memories {
+    let mut html = format!(
+        r#"<div class="text-gray-400 text-sm mb-4">Found {} memories</div>"#,
+        filtered.len()
+    );
+    
+    for mem in filtered {
         let tags_html: String = mem.tags.iter()
             .map(|t| format!(r#"<span class="bg-cyan-900/50 text-cyan-400 px-2 py-1 rounded-lg text-sm">#{}</span>"#, t))
             .collect::<Vec<_>>()
