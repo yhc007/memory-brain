@@ -980,25 +980,211 @@ fn cmd_export(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn
 fn cmd_import(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     let input_path = args.get(0).ok_or("No input file specified")?;
     
-    let json = std::fs::read_to_string(input_path)?;
-    let memories: Vec<MemoryItem> = serde_json::from_str(&json)?;
-
-    let mut count = 0;
-    for mut mem in memories {
-        // Regenerate embedding
-        mem.embedding = Some(brain.embedder().embed(&mem.content));
-        
-        match mem.memory_type {
-            MemoryType::Episodic => brain.episodic.store(mem)?,
-            MemoryType::Semantic => brain.semantic.store(mem)?,
-            MemoryType::Procedural => brain.procedural.store(mem)?,
-            _ => brain.semantic.store(mem)?,
+    // Parse options
+    let mut default_tags: Vec<String> = Vec::new();
+    let mut memory_type = MemoryType::Semantic;
+    
+    for arg in args.iter().skip(1) {
+        if arg.starts_with("--tags=") {
+            default_tags = arg.trim_start_matches("--tags=")
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        } else if arg == "--episodic" {
+            memory_type = MemoryType::Episodic;
+        } else if arg == "--procedural" {
+            memory_type = MemoryType::Procedural;
         }
-        count += 1;
+    }
+    
+    // Detect format from extension
+    let path = std::path::Path::new(input_path);
+    let extension = path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let mut count = 0;
+    let mut errors = 0;
+    
+    match extension.as_str() {
+        "json" => {
+            // JSON import (array of MemoryItem or simple objects)
+            let json = std::fs::read_to_string(input_path)?;
+            
+            // Try full MemoryItem format first
+            if let Ok(memories) = serde_json::from_str::<Vec<MemoryItem>>(&json) {
+                for mut mem in memories {
+                    mem.embedding = Some(brain.embedder().embed(&mem.content));
+                    mem.tags.extend(default_tags.clone());
+                    
+                    match mem.memory_type {
+                        MemoryType::Episodic => brain.episodic.store(mem)?,
+                        MemoryType::Semantic => brain.semantic.store(mem)?,
+                        MemoryType::Procedural => brain.procedural.store(mem)?,
+                        _ => brain.semantic.store(mem)?,
+                    }
+                    count += 1;
+                    if !quiet && count % 100 == 0 {
+                        print!("\r📥 Imported {} memories...", count);
+                        std::io::stdout().flush()?;
+                    }
+                }
+            } else {
+                // Try simple format: [{"content": "...", "tags": [...]}]
+                #[derive(serde::Deserialize)]
+                struct SimpleMemory {
+                    content: String,
+                    #[serde(default)]
+                    tags: Vec<String>,
+                    #[serde(default)]
+                    context: Option<String>,
+                }
+                
+                let simple: Vec<SimpleMemory> = serde_json::from_str(&json)?;
+                for item in simple {
+                    let mut mem = MemoryItem::new(&item.content, item.context.as_deref());
+                    mem.embedding = Some(brain.embedder().embed(&item.content));
+                    mem.tags = item.tags;
+                    mem.tags.extend(default_tags.clone());
+                    mem.memory_type = memory_type.clone();
+                    
+                    match memory_type {
+                        MemoryType::Episodic => brain.episodic.store(mem)?,
+                        MemoryType::Semantic => brain.semantic.store(mem)?,
+                        MemoryType::Procedural => brain.procedural.store(mem)?,
+                        _ => brain.semantic.store(mem)?,
+                    }
+                    count += 1;
+                }
+            }
+        }
+        
+        "csv" => {
+            // CSV import: content,tags (comma-separated)
+            let content = std::fs::read_to_string(input_path)?;
+            let mut lines = content.lines();
+            
+            // Skip header if it looks like one
+            if let Some(first) = lines.next() {
+                let lower = first.to_lowercase();
+                if !lower.contains("content") && !lower.contains("text") {
+                    // Not a header, process it
+                    if let Some(mem) = parse_csv_line(first, &default_tags, memory_type.clone(), brain) {
+                        match memory_type {
+                            MemoryType::Episodic => brain.episodic.store(mem)?,
+                            MemoryType::Semantic => brain.semantic.store(mem)?,
+                            MemoryType::Procedural => brain.procedural.store(mem)?,
+                            _ => brain.semantic.store(mem)?,
+                        }
+                        count += 1;
+                    }
+                }
+            }
+            
+            for line in lines {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if let Some(mem) = parse_csv_line(line, &default_tags, memory_type.clone(), brain) {
+                    match memory_type {
+                        MemoryType::Episodic => brain.episodic.store(mem)?,
+                        MemoryType::Semantic => brain.semantic.store(mem)?,
+                        MemoryType::Procedural => brain.procedural.store(mem)?,
+                        _ => brain.semantic.store(mem)?,
+                    }
+                    count += 1;
+                } else {
+                    errors += 1;
+                }
+                
+                if !quiet && count % 100 == 0 {
+                    print!("\r📥 Imported {} memories...", count);
+                    std::io::stdout().flush()?;
+                }
+            }
+        }
+        
+        "txt" | "md" | _ => {
+            // Text file: one memory per line (or per paragraph for .md)
+            let content = std::fs::read_to_string(input_path)?;
+            
+            let delimiter = if extension == "md" { "\n\n" } else { "\n" };
+            
+            for chunk in content.split(delimiter) {
+                let text = chunk.trim();
+                if text.is_empty() || text.len() < 3 {
+                    continue;
+                }
+                
+                let mut mem = MemoryItem::new(text, None);
+                mem.embedding = Some(brain.embedder().embed(text));
+                mem.tags = default_tags.clone();
+                mem.memory_type = memory_type.clone();
+                
+                match memory_type {
+                    MemoryType::Episodic => brain.episodic.store(mem)?,
+                    MemoryType::Semantic => brain.semantic.store(mem)?,
+                    MemoryType::Procedural => brain.procedural.store(mem)?,
+                    _ => brain.semantic.store(mem)?,
+                }
+                count += 1;
+                
+                if !quiet && count % 100 == 0 {
+                    print!("\r📥 Imported {} memories...", count);
+                    std::io::stdout().flush()?;
+                }
+            }
+        }
     }
 
-    if !quiet { println!("📥 Imported {} memories from {}", count, input_path); }
+    if !quiet {
+        println!("\r📥 Imported {} memories from {}        ", count, input_path);
+        if errors > 0 {
+            println!("⚠️  {} lines skipped due to errors", errors);
+        }
+    }
     Ok(())
+}
+
+fn parse_csv_line(line: &str, default_tags: &[String], memory_type: MemoryType, brain: &Brain) -> Option<MemoryItem> {
+    // Simple CSV parsing (content,tags)
+    // Handle quoted strings
+    let parts: Vec<&str> = if line.starts_with('"') {
+        // Quoted content
+        if let Some(end_quote) = line[1..].find('"') {
+            let content = &line[1..end_quote + 1];
+            let rest = &line[end_quote + 2..];
+            let tags_str = rest.trim_start_matches(',').trim();
+            vec![content, tags_str]
+        } else {
+            vec![line]
+        }
+    } else {
+        line.splitn(2, ',').collect()
+    };
+    
+    let content = parts.get(0)?.trim();
+    if content.is_empty() {
+        return None;
+    }
+    
+    let mut mem = MemoryItem::new(content, None);
+    mem.embedding = Some(brain.embedder().embed(content));
+    mem.memory_type = memory_type;
+    
+    // Parse tags if present
+    if let Some(tags_str) = parts.get(1) {
+        mem.tags = tags_str
+            .split(&[',', ';'][..])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
+    mem.tags.extend(default_tags.iter().cloned());
+    
+    Some(mem)
 }
 
 fn cmd_chat(brain: Brain, _args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
