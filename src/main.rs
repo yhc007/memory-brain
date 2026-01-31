@@ -134,6 +134,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_merge(&mut brain, &args[2..], quiet)?;
         }
 
+        Some("bench") | Some("benchmark") => {
+            cmd_bench(quiet)?;
+        }
+
         Some("batch") | Some("b") => {
             cmd_batch(&mut brain, &args[2..], quiet)?;
         }
@@ -638,6 +642,25 @@ fn cmd_rebuild(brain: &mut Brain, quiet: bool) -> Result<(), Box<dyn std::error:
         println!("{}", stats.index_stats.documents);
     }
 
+    Ok(())
+}
+
+fn cmd_bench(quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::bench;
+    
+    if !quiet {
+        println!("⚡ Memory Brain Benchmark\n");
+        
+        // Test SIMD correctness first
+        if bench::test_simd_correctness() {
+            println!("✅ SIMD correctness verified\n");
+        } else {
+            println!("❌ SIMD mismatch detected!\n");
+        }
+    }
+    
+    bench::run_benchmarks(!quiet);
+    
     Ok(())
 }
 
