@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("memory-brain")
-        .join("brain.db");
+        .join("coredb");
 
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -750,7 +750,7 @@ fn cmd_stats(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error
     let db_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("memory-brain")
-        .join("brain.db");
+        .join("coredb");
     
     if let Ok(meta) = std::fs::metadata(&db_path) {
         println!("  Database Size:   {:.1} KB", meta.len() as f64 / 1024.0);
@@ -1638,7 +1638,7 @@ fn cmd_serve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let db_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("memory-brain")
-        .join("brain.db");
+        .join("coredb");
 
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
