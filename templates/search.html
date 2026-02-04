@@ -1,0 +1,74 @@
+<h1 class="text-4xl font-bold mb-8">🔍 Search Memories</h1>
+
+<div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 mb-6">
+    <form hx-post="/search/results" hx-target="#results" hx-swap="innerHTML" class="space-y-4">
+        <!-- 검색어 -->
+        <div class="flex gap-4">
+            <input 
+                type="text" 
+                name="query" 
+                placeholder="Search your memories..."
+                class="flex-1 bg-gray-700 border border-gray-600 rounded-xl px-6 py-4 text-white placeholder-gray-400"
+                autofocus
+            />
+            <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 px-8 py-4 rounded-xl transition">
+                Search
+            </button>
+        </div>
+        
+        <!-- 필터 옵션 -->
+        <div class="flex flex-wrap gap-4 pt-2">
+            <!-- 태그 필터 -->
+            <div class="flex items-center gap-2">
+                <label class="text-gray-400 text-sm">Tags:</label>
+                <input 
+                    type="text" 
+                    name="tags" 
+                    placeholder="news, stock..."
+                    class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm w-40"
+                />
+            </div>
+            
+            <!-- 날짜 범위 -->
+            <div class="flex items-center gap-2">
+                <label class="text-gray-400 text-sm">From:</label>
+                <input 
+                    type="date" 
+                    name="from_date" 
+                    class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                />
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <label class="text-gray-400 text-sm">To:</label>
+                <input 
+                    type="date" 
+                    name="to_date" 
+                    class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                />
+            </div>
+            
+            <!-- 결과 수 -->
+            <div class="flex items-center gap-2">
+                <label class="text-gray-400 text-sm">Limit:</label>
+                <select name="limit" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- 자주 쓰는 태그 -->
+<div class="mb-6">
+    <span class="text-gray-400 text-sm mr-2">Quick tags:</span>
+    <button onclick="document.querySelector('input[name=tags]').value='news'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">📰 news</button>
+    <button onclick="document.querySelector('input[name=tags]').value='stock'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">📈 stock</button>
+    <button onclick="document.querySelector('input[name=tags]').value='clawdbot'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">🤖 clawdbot</button>
+    <button onclick="document.querySelector('input[name=tags]').value='pekko'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm">🦊 pekko</button>
+</div>
+
+<div id="results" class="space-y-4"></div>

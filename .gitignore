@@ -1,0 +1,7 @@
+/target
+.venv/
+*.pyc
+__pycache__/
+visual_index/
+*.so
+*.dylib
