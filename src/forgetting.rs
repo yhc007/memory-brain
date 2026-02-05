@@ -101,7 +101,7 @@ mod tests {
     fn test_access_increases_stability() {
         let curve = ForgettingCurve::new();
         
-        let mut item1 = MemoryItem::new("test", None);
+        let item1 = MemoryItem::new("test", None);
         let mut item2 = MemoryItem::new("test", None);
         
         // Access item2 multiple times

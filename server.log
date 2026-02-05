@@ -1,0 +1,303 @@
+warning: unused import: `SSTable`
+ --> /Volumes/T7/Work/coredb/src/query/engine.rs:2:32
+  |
+2 | use crate::storage::{Memtable, SSTable};
+  |                                ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `SeekFrom`
+ --> /Volumes/T7/Work/coredb/src/wal.rs:3:57
+  |
+3 | use tokio::io::{AsyncWriteExt, AsyncReadExt, BufWriter, SeekFrom};
+  |                                                         ^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> /Volumes/T7/Work/coredb/src/persistence/snapshot.rs:1:5
+  |
+1 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BufWriter`
+ --> /Volumes/T7/Work/coredb/src/persistence/snapshot.rs:3:39
+  |
+3 | use std::io::{Write, Read, BufReader, BufWriter};
+  |                                       ^^^^^^^^^
+
+warning: ambiguous glob re-exports
+  --> /Volumes/T7/Work/coredb/src/lib.rs:11:9
+   |
+11 | pub use schema::*;
+   |         ^^^^^^^^^ the name `TableOptions` in the type namespace is first re-exported here
+12 | pub use storage::*;
+13 | pub use query::*;
+   |         -------- but the name `TableOptions` in the type namespace is also re-exported here
+   |
+   = note: `#[warn(ambiguous_glob_reexports)]` on by default
+
+warning: ambiguous glob re-exports
+  --> /Volumes/T7/Work/coredb/src/lib.rs:11:9
+   |
+11 | pub use schema::*;
+   |         ^^^^^^^^^ the name `CompactionStrategy` in the type namespace is first re-exported here
+...
+14 | pub use compaction::*;
+   |         ------------- but the name `CompactionStrategy` in the type namespace is also re-exported here
+
+warning: ambiguous glob re-exports
+  --> /Volumes/T7/Work/coredb/src/lib.rs:11:9
+   |
+11 | pub use schema::*;
+   |         ^^^^^^^^^ the name `Row` in the type namespace is first re-exported here
+12 | pub use storage::*;
+13 | pub use query::*;
+   |         -------- but the name `Row` in the type namespace is also re-exported here
+
+warning: value assigned to `current_offset` is never read
+  --> /Volumes/T7/Work/coredb/src/storage/sstable.rs:66:17
+   |
+66 |         let mut current_offset = 0u64;
+   |                 ^^^^^^^^^^^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` on by default
+
+warning: unused variable: `header_size`
+  --> /Volumes/T7/Work/coredb/src/storage/sstable.rs:72:13
+   |
+72 |         let header_size = bincode::serialized_size(&SSTableHeader {
+   |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_header_size`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> /Volumes/T7/Work/coredb/src/storage/sstable.rs:366:13
+    |
+366 |         let mut rows = crossbeam_skiplist::SkipMap::new();
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `table_key`
+  --> /Volumes/T7/Work/coredb/src/compaction.rs:71:13
+   |
+71 |         let table_key = format!("{}.{}", keyspace, table);
+   |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_table_key`
+
+warning: variable `loaded_count` is assigned to, but never used
+   --> /Volumes/T7/Work/coredb/src/database.rs:166:29
+    |
+166 |                     let mut loaded_count = 0;
+    |                             ^^^^^^^^^^^^
+    |
+    = note: consider using `_loaded_count` instead
+
+warning: variable does not need to be mutable
+   --> /Volumes/T7/Work/coredb/src/query/parser.rs:162:17
+    |
+162 |             let mut clustering_key = Vec::new();
+    |                 ----^^^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: unused variable: `query`
+   --> /Volumes/T7/Work/coredb/src/query/parser.rs:324:21
+    |
+324 |     fn parse_update(query: &str) -> Result<CqlStatement> {
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_query`
+
+warning: unused variable: `query`
+   --> /Volumes/T7/Work/coredb/src/query/parser.rs:331:21
+    |
+331 |     fn parse_delete(query: &str) -> Result<CqlStatement> {
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_query`
+
+warning: unused import: `cosine_similarity`
+  --> src/glove.rs:13:45
+   |
+13 | use crate::embedding::{Embedder, normalize, cosine_similarity, tokenize};
+   |                                             ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `MemoryItem`
+   --> src/llm.rs:241:20
+    |
+241 | use crate::{Brain, MemoryItem};
+    |                    ^^^^^^^^^^
+
+warning: unused import: `HashMap`
+ --> src/merge.rs:7:24
+  |
+7 | use std::collections::{HashMap, HashSet};
+  |                        ^^^^^^^
+
+warning: unused import: `MemoryItem`
+  --> src/watch.rs:11:20
+   |
+11 | use crate::{Brain, MemoryItem};
+   |                    ^^^^^^^^^^
+
+warning: unused import: `MemoryType`
+ --> src/sam.rs:6:32
+  |
+6 | use crate::{Brain, MemoryItem, MemoryType, Embedder, HnswIndex};
+  |                                ^^^^^^^^^^
+
+warning: unused import: `Embedder`
+  --> src/dream.rs:10:32
+   |
+10 | use crate::{Brain, MemoryItem, Embedder, cosine_similarity};
+   |                                ^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> src/mindmap.rs:8:5
+  |
+8 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused import: `Duration`
+ --> src/predict.rs:9:19
+  |
+9 | use chrono::{Utc, Duration, Datelike, Timelike, Weekday};
+  |                   ^^^^^^^^
+
+warning: unused imports: `Local` and `NaiveDate`
+  --> src/tui.rs:16:14
+   |
+16 | use chrono::{Local, NaiveDate, Datelike};
+   |              ^^^^^  ^^^^^^^^^
+
+warning: unused import: `Read`
+ --> src/compression.rs:9:15
+  |
+9 | use std::io::{Read, Write};
+  |               ^^^^
+
+warning: unused import: `Write`
+ --> src/compression.rs:9:21
+  |
+9 | use std::io::{Read, Write};
+  |                     ^^^^^
+
+warning: unused variable: `next_idx`
+  --> src/hnsw_index.rs:78:17
+   |
+78 |         let mut next_idx = self.next_idx.write().unwrap();
+   |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_next_idx`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+  --> src/hnsw_index.rs:78:13
+   |
+78 |         let mut next_idx = self.next_idx.write().unwrap();
+   |             ----^^^^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `remainder`
+   --> src/simd_ops.rs:112:9
+    |
+112 |     let remainder = len % 4;
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_remainder`
+
+warning: unused variable: `sign`
+   --> src/watch.rs:197:25
+    |
+197 |                     let sign = if diff.semantic_delta > 0 { "+" } else { "" };
+    |                         ^^^^ help: if this is intentional, prefix it with an underscore: `_sign`
+
+warning: unused variable: `limit`
+   --> src/sam.rs:209:62
+    |
+209 |     pub fn recall_by_type(&self, memory_type: SamMemoryType, limit: usize) -> Result<Vec<MemoryItem>, Box<dyn std::error::Error>> {
+    |                                                              ^^^^^ help: if this is intentional, prefix it with an underscore: `_limit`
+
+warning: unused variable: `tabs`
+   --> src/tui.rs:160:9
+    |
+160 |     let tabs: Vec<Line> = app.tabs.iter()
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_tabs`
+
+warning: function `cosine_similarity_scalar` is never used
+   --> src/simd_ops.rs:245:4
+    |
+245 | fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: function `dot_product_scalar` is never used
+   --> src/simd_ops.rs:258:4
+    |
+258 | fn dot_product_scalar(a: &[f32], b: &[f32]) -> f32 {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `l2_norm_scalar` is never used
+   --> src/simd_ops.rs:263:4
+    |
+263 | fn l2_norm_scalar(v: &[f32]) -> f32 {
+    |    ^^^^^^^^^^^^^^
+
+warning: field `timestamp` is never read
+  --> src/watch.rs:40:5
+   |
+39 | struct MemorySnapshot {
+   |        -------------- field in this struct
+40 |     timestamp: Instant,
+   |     ^^^^^^^^^
+   |
+   = note: `MemorySnapshot` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `scroll_offset` is never read
+  --> src/tui.rs:36:5
+   |
+20 | pub struct App {
+   |            --- field in this struct
+...
+36 |     scroll_offset: usize,
+   |     ^^^^^^^^^^^^^
+
+warning: fields `from_date` and `to_date` are never read
+   --> src/web_ui.rs:174:5
+    |
+169 | pub struct SearchForm {
+    |            ---------- fields in this struct
+...
+174 |     from_date: String,
+    |     ^^^^^^^^^
+175 |     #[serde(default)]
+176 |     to_date: String,
+    |     ^^^^^^^
+
+warning: unused import: `SamMemoryType`
+    --> src/main.rs:1703:45
+     |
+1703 |     use memory_brain::{SamBrain, SamMemory, SamMemoryType};
+     |                                             ^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `texts`
+   --> src/main.rs:366:9
+    |
+366 |     let texts: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_texts`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `content`
+    --> src/main.rs:1092:9
+     |
+1092 |     let content = match format {
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_content`
+
+🧪 Using test embedder
+🔍 Index loaded: 32 memories, 324 keywords
+🔍 Index loaded: 32 memories, 324 keywords
+🧠 Memory Brain Server starting on http://0.0.0.0:3030

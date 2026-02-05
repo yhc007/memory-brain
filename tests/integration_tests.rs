@@ -1,6 +1,6 @@
 //! Integration tests for Memory Brain
 
-use memory_brain::{Brain, MemoryItem, MemoryType, GloVeEmbedder};
+use memory_brain::{Brain, GloVeEmbedder};
 use std::sync::Arc;
 use tempfile::TempDir;
 

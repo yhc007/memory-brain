@@ -223,6 +223,7 @@ impl Embedder for GloVeEmbedder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cosine_similarity;
 
     #[test]
     fn test_glove_test_embedder() {
