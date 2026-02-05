@@ -601,12 +601,308 @@ pub async fn visual_thumb(
     }
 }
 
+/// Mind Map page - interactive D3.js force graph
+pub async fn mindmap_page(State(state): State<Arc<AppState>>) -> Html<String> {
+    let brain = state.brain.read().await;
+    let memory_count = brain.semantic.search("", 10000).map(|v| v.len()).unwrap_or(0);
+    
+    let content = format!(r##"
+<h1 class="text-4xl font-bold mb-4">🕸️ Memory Mind Map</h1>
+<p class="text-gray-400 mb-6">기억들의 연결을 시각적으로 탐색하세요. 노드를 드래그하거나 줌/패닝할 수 있습니다.</p>
+
+<div class="flex gap-4 mb-6">
+    <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700">
+        <span class="text-gray-400 text-sm">Threshold:</span>
+        <select id="threshold" onchange="loadMindMap()" class="bg-gray-700 text-white rounded px-2 py-1 ml-2">
+            <option value="0.3" selected>0.3 (많은 연결)</option>
+            <option value="0.4">0.4 (보통)</option>
+            <option value="0.5">0.5 (강한 연결만)</option>
+            <option value="0.6">0.6 (매우 강한 연결)</option>
+        </select>
+    </div>
+    <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700">
+        <span class="text-gray-400 text-sm">Limit:</span>
+        <select id="limit" onchange="loadMindMap()" class="bg-gray-700 text-white rounded px-2 py-1 ml-2">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+        </select>
+    </div>
+    <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700 text-cyan-400">
+        🧠 {memory_count} memories
+    </div>
+</div>
+
+<div id="mindmap-container" class="bg-gray-900/80 rounded-2xl border border-gray-700 relative" style="height: 70vh; overflow: hidden;">
+    <div id="mindmap-loading" class="absolute inset-0 flex items-center justify-center text-gray-400">
+        로딩 중...
+    </div>
+    <div id="tooltip" class="absolute hidden bg-black/90 text-white p-3 rounded-lg text-sm max-w-xs border border-gray-600 pointer-events-none z-10"></div>
+    <div id="legend" class="absolute top-4 right-4 bg-black/50 p-3 rounded-lg text-xs text-white"></div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+let simulation;
+const colors = d3.schemeCategory10;
+
+function loadMindMap() {{
+    const threshold = document.getElementById('threshold').value;
+    const limit = document.getElementById('limit').value;
+    
+    fetch(`/mindmap/data?threshold=${{threshold}}&limit=${{limit}}`)
+        .then(r => r.json())
+        .then(data => renderMindMap(data))
+        .catch(e => {{
+            document.getElementById('mindmap-loading').textContent = 'Error: ' + e;
+        }});
+}}
+
+function renderMindMap(data) {{
+    const container = document.getElementById('mindmap-container');
+    const loading = document.getElementById('mindmap-loading');
+    loading.style.display = 'none';
+    
+    // Clear previous
+    d3.select('#mindmap-container svg').remove();
+    if (simulation) simulation.stop();
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    if (data.nodes.length === 0) {{
+        loading.style.display = 'flex';
+        loading.textContent = '기억이 없습니다. Store에서 추가하세요.';
+        return;
+    }}
+    
+    const svg = d3.select('#mindmap-container')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+    
+    const g = svg.append('g');
+    
+    svg.call(d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => g.attr('transform', event.transform)));
+    
+    simulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links).id(d => d.id).distance(80))
+        .force('charge', d3.forceManyBody().strength(-150))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => d.size + 5));
+    
+    const link = g.append('g')
+        .selectAll('line')
+        .data(data.links)
+        .join('line')
+        .attr('stroke', 'rgba(255,255,255,0.15)')
+        .attr('stroke-width', d => d.weight * 3);
+    
+    const node = g.append('g')
+        .selectAll('g')
+        .data(data.nodes)
+        .join('g')
+        .call(d3.drag()
+            .on('start', (e) => {{ if (!e.active) simulation.alphaTarget(0.3).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; }})
+            .on('drag', (e) => {{ e.subject.fx = e.x; e.subject.fy = e.y; }})
+            .on('end', (e) => {{ if (!e.active) simulation.alphaTarget(0); e.subject.fx = null; e.subject.fy = null; }}));
+    
+    node.append('circle')
+        .attr('r', d => d.size)
+        .attr('fill', d => colors[d.group % 10])
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5)
+        .style('cursor', 'pointer');
+    
+    node.append('text')
+        .attr('dx', d => d.size + 4)
+        .attr('dy', 4)
+        .text(d => d.label)
+        .attr('fill', '#ccc')
+        .attr('font-size', '10px')
+        .style('pointer-events', 'none');
+    
+    // Tooltip
+    const tooltip = document.getElementById('tooltip');
+    node.on('mouseover', (event, d) => {{
+        tooltip.classList.remove('hidden');
+        tooltip.innerHTML = `<strong>${{d.label}}</strong><br><span class="text-gray-300">${{d.content}}</span>` +
+            (d.tags.length ? `<div class="mt-2 text-gray-500">${{d.tags.map(t => '#'+t).join(' ')}}</div>` : '');
+        tooltip.style.left = (event.offsetX + 15) + 'px';
+        tooltip.style.top = (event.offsetY - 10) + 'px';
+    }}).on('mouseout', () => tooltip.classList.add('hidden'));
+    
+    simulation.on('tick', () => {{
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        node.attr('transform', d => `translate(${{d.x}},${{d.y}})`);
+    }});
+    
+    // Legend
+    const groups = [...new Set(data.nodes.map(n => n.group))];
+    const tagNames = {{}};
+    data.nodes.forEach(n => {{ if (n.tags.length && !tagNames[n.group]) tagNames[n.group] = n.tags[0]; }});
+    const legend = document.getElementById('legend');
+    legend.innerHTML = groups.slice(0, 10).map(g =>
+        `<div class="flex items-center gap-2 my-1"><div class="w-3 h-3 rounded-full" style="background:${{colors[g % 10]}}"></div>${{tagNames[g] || 'Group '+g}}</div>`
+    ).join('');
+}}
+
+loadMindMap();
+</script>"##, memory_count = memory_count);
+
+    Html(render_page("Mind Map", &content))
+}
+
+/// Mind Map JSON data endpoint
+pub async fn mindmap_data(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> axum::Json<serde_json::Value> {
+    let brain = state.brain.read().await;
+    let threshold: f32 = params.get("threshold").and_then(|s| s.parse().ok()).unwrap_or(0.3);
+    let limit: usize = params.get("limit").and_then(|s| s.parse().ok()).unwrap_or(100);
+    
+    let map = crate::mindmap::MindMap::from_brain(&brain, limit, threshold);
+    
+    let nodes: Vec<serde_json::Value> = map.nodes.iter().map(|n| {
+        serde_json::json!({
+            "id": n.id,
+            "label": n.label,
+            "content": n.content,
+            "group": n.group,
+            "size": n.size,
+            "tags": n.tags,
+        })
+    }).collect();
+    
+    let links: Vec<serde_json::Value> = map.edges.iter().map(|e| {
+        serde_json::json!({
+            "source": e.source,
+            "target": e.target,
+            "weight": e.weight,
+        })
+    }).collect();
+    
+    axum::Json(serde_json::json!({
+        "nodes": nodes,
+        "links": links,
+    }))
+}
+
+/// Timeline page - memories over time
+pub async fn timeline_page(State(state): State<Arc<AppState>>) -> Html<String> {
+    let content = r##"
+<h1 class="text-4xl font-bold mb-4">📅 Memory Timeline</h1>
+<p class="text-gray-400 mb-6">시간 순으로 기억의 흐름을 확인하세요.</p>
+
+<div id="timeline-container" class="space-y-1" hx-get="/timeline/data" hx-trigger="load" hx-swap="innerHTML">
+    <div class="text-gray-400 text-center py-12">로딩 중...</div>
+</div>
+"##;
+
+    Html(render_page("Timeline", content))
+}
+
+/// Timeline data (HTMX partial)
+pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
+    let brain = state.brain.read().await;
+    let memories = brain.semantic.search("", 10000).unwrap_or_default();
+    
+    if memories.is_empty() {
+        return Html(r#"<div class="text-gray-500 text-center py-12">기억이 없습니다.</div>"#.to_string());
+    }
+    
+    // Group by date
+    let mut by_date: std::collections::BTreeMap<String, Vec<&crate::MemoryItem>> = std::collections::BTreeMap::new();
+    for mem in &memories {
+        let date = mem.created_at.format("%Y-%m-%d").to_string();
+        by_date.entry(date).or_default().push(mem);
+    }
+    
+    let type_colors = |t: &crate::MemoryType| match t {
+        crate::MemoryType::Episodic => ("blue", "Episodic"),
+        crate::MemoryType::Semantic => ("cyan", "Semantic"),
+        crate::MemoryType::Procedural => ("purple", "Procedural"),
+        crate::MemoryType::Working => ("green", "Working"),
+    };
+    
+    let mut html = String::new();
+    
+    // Reverse chronological
+    for (date, mems) in by_date.iter().rev() {
+        let weekday = if let Ok(d) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+            d.format("%A").to_string()
+        } else {
+            String::new()
+        };
+        
+        html.push_str(&format!(
+            r##"<div class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
+                    <h2 class="text-xl font-semibold text-cyan-400">{}</h2>
+                    <span class="text-gray-500 text-sm">{}</span>
+                    <span class="text-gray-600 text-sm">({} memories)</span>
+                </div>
+                <div class="ml-6 border-l-2 border-gray-700 pl-6 space-y-3">"##,
+            date, weekday, mems.len()
+        ));
+        
+        for mem in mems {
+            let (color, type_name) = type_colors(&mem.memory_type);
+            let strength_pct = (mem.strength * 100.0) as u32;
+            let content_preview = if mem.content.len() > 120 {
+                format!("{}...", &mem.content.chars().take(120).collect::<String>())
+            } else {
+                mem.content.clone()
+            };
+            
+            html.push_str(&format!(
+                r##"<div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700 hover:border-{color}-500/50 transition">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="text-gray-200">{content}</div>
+                            <div class="flex items-center gap-3 mt-2 text-xs">
+                                <span class="bg-{color}-900/50 text-{color}-400 px-2 py-0.5 rounded">{type_name}</span>
+                                <span class="text-gray-500">{time}</span>
+                                <span class="text-gray-500">💪 {strength}%</span>
+                                {tags}
+                            </div>
+                        </div>
+                    </div>
+                </div>"##,
+                color = color,
+                content = html_escape(&content_preview),
+                type_name = type_name,
+                time = mem.created_at.format("%H:%M"),
+                strength = strength_pct,
+                tags = if mem.tags.is_empty() { String::new() } else {
+                    format!("<span class=\"text-gray-600\">{}</span>", 
+                        mem.tags.iter().map(|t| format!("#{}", t)).collect::<Vec<_>>().join(" "))
+                }
+            ));
+        }
+        
+        html.push_str("</div></div>");
+    }
+    
+    Html(html)
+}
+
 /// Create web UI router
 pub fn create_web_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(dashboard_page))
         .route("/memories", get(memories_page))
         .route("/visual", get(visual_page))
+        .route("/mindmap", get(mindmap_page))
+        .route("/mindmap/data", get(mindmap_data))
+        .route("/timeline", get(timeline_page))
+        .route("/timeline/data", get(timeline_data))
         .route("/search", get(search_page))
         .route("/search/results", axum::routing::post(search_results))
         .route("/store", get(store_page))
