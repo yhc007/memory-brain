@@ -907,7 +907,7 @@ pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
             <form hx-post="/coredb/query" hx-target="#results" hx-swap="innerHTML" hx-indicator="#loading">
                 <textarea name="query" rows="3" 
                     class="w-full bg-gray-900 text-emerald-300 font-mono rounded-lg p-4 border border-gray-600 focus:border-emerald-500 focus:outline-none resize-y"
-                    placeholder="SELECT * FROM memory_brain.memories LIMIT 10">SELECT * FROM memory_brain.memories LIMIT 20</textarea>
+                    placeholder="SELECT * FROM memory_brain.semantic LIMIT 10">SELECT * FROM memory_brain.semantic LIMIT 20</textarea>
                 <div class="flex gap-3 mt-3">
                     <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition font-semibold">
                         ▶ Execute
@@ -918,7 +918,7 @@ pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
             
             <div class="mt-3 text-xs text-gray-500">
                 Quick queries:
-                <button onclick="setQuery('SELECT * FROM memory_brain.memories LIMIT 20')" class="text-emerald-500 hover:underline ml-2">All memories</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-emerald-500 hover:underline ml-2">Semantic (default)</button>
                 <button onclick="setQuery('SELECT * FROM memory_brain.episodic LIMIT 20')" class="text-blue-500 hover:underline ml-2">Episodic</button>
                 <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-cyan-500 hover:underline ml-2">Semantic</button>
                 <button onclick="setQuery('SELECT * FROM memory_brain.procedural LIMIT 20')" class="text-purple-500 hover:underline ml-2">Procedural</button>
@@ -937,10 +937,6 @@ pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
         <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
             <h3 class="text-lg font-semibold text-emerald-400 mb-3">📋 Tables</h3>
             <div class="space-y-2 text-sm">
-                <div class="flex justify-between text-gray-300">
-                    <span>memory_brain.memories</span>
-                    <span class="text-gray-500">모든 기억</span>
-                </div>
                 <div class="flex justify-between text-gray-300">
                     <span>memory_brain.episodic</span>
                     <span class="text-gray-500">일화 기억</span>
