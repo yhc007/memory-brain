@@ -1,6 +1,6 @@
 //! Web UI for Memory Brain
 //! 
-//! Beautiful dashboard with HTMX for interactivity! 🌐
+//! Beautiful dashboard with HTMX + Lucide icons
 
 use axum::{
     extract::State,
@@ -41,33 +41,33 @@ pub async fn dashboard_page(State(state): State<Arc<AppState>>) -> Html<String> 
     let search_pct = if total > 0 { searches * 100 / total } else { 0 };
     
     let content = format!(
-        r##"<h1 class="text-4xl font-bold mb-8">📊 Dashboard</h1>
+        r##"<h1 class="text-4xl font-bold mb-8"><i data-lucide="layout-dashboard" class="w-6 h-6 inline-block align-middle"></i> Dashboard</h1>
 
 <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
     <div class="bg-gradient-to-br from-green-900/50 to-green-800/30 rounded-2xl p-6 border border-green-700/50 glow-green">
-        <div class="text-green-400 text-sm">📥 Stores Today</div>
+        <div class="text-green-400 text-sm"><i data-lucide="archive" class="w-4 h-4 inline-block align-middle"></i> Stores Today</div>
         <div class="text-4xl font-bold text-green-300 mt-2">{}</div>
     </div>
     
     <div class="bg-gradient-to-br from-blue-900/50 to-blue-800/30 rounded-2xl p-6 border border-blue-700/50">
-        <div class="text-blue-400 text-sm">🔍 Recalls Today</div>
+        <div class="text-blue-400 text-sm"><i data-lucide="search" class="w-4 h-4 inline-block align-middle"></i> Recalls Today</div>
         <div class="text-4xl font-bold text-blue-300 mt-2">{}</div>
     </div>
     
     <div class="bg-gradient-to-br from-yellow-900/50 to-yellow-800/30 rounded-2xl p-6 border border-yellow-700/50">
-        <div class="text-yellow-400 text-sm">🔎 Searches Today</div>
+        <div class="text-yellow-400 text-sm"><i data-lucide="filter" class="w-4 h-4 inline-block align-middle"></i> Searches Today</div>
         <div class="text-4xl font-bold text-yellow-300 mt-2">{}</div>
     </div>
     
     <div class="bg-gradient-to-br from-cyan-900/50 to-cyan-800/30 rounded-2xl p-6 border border-cyan-700/50 glow">
-        <div class="text-cyan-400 text-sm">🧠 Total Memories</div>
+        <div class="text-cyan-400 text-sm"><i data-lucide="brain" class="w-4 h-4 inline-block align-middle"></i> Total Memories</div>
         <div class="text-4xl font-bold text-cyan-300 mt-2">{}</div>
     </div>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-        <h2 class="text-xl font-semibold mb-4">📈 Today's Activity</h2>
+        <h2 class="text-xl font-semibold mb-4"><i data-lucide="trending-up" class="w-5 h-5 inline-block align-middle"></i> Today's Activity</h2>
         <div class="space-y-3">
             <div class="flex items-center gap-3">
                 <span class="text-green-400 w-24">Stores</span>
@@ -94,16 +94,16 @@ pub async fn dashboard_page(State(state): State<Arc<AppState>>) -> Html<String> 
     </div>
     
     <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-        <h2 class="text-xl font-semibold mb-4">⚡ Quick Actions</h2>
+        <h2 class="text-xl font-semibold mb-4"><i data-lucide="zap" class="w-5 h-5 inline-block align-middle"></i> Quick Actions</h2>
         <div class="flex flex-wrap gap-3">
             <a href="/store" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl transition">
-                ➕ Store Memory
+                <i data-lucide="plus-circle" class="w-6 h-6 inline-block align-middle"></i> Store Memory
             </a>
             <a href="/search" class="bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-xl transition">
-                🔍 Search
+                <i data-lucide="search" class="w-4 h-4 inline-block align-middle"></i> Search
             </a>
             <a href="/memories" class="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded-xl transition">
-                📋 Browse All
+                <i data-lucide="list" class="w-4 h-4 inline-block align-middle"></i> Browse All
             </a>
         </div>
     </div>
@@ -143,9 +143,9 @@ pub async fn memories_page(State(state): State<Arc<AppState>>) -> Html<String> {
     
     let content = format!(
         r##"<div class="flex justify-between items-center mb-8">
-            <h1 class="text-4xl font-bold">🧠 Memories</h1>
+            <h1 class="text-4xl font-bold"><i data-lucide="brain" class="w-8 h-8 inline-block align-middle"></i> Memories</h1>
             <a href="/store" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl transition">
-                ➕ Store New
+                <i data-lucide="plus" class="w-4 h-4 inline-block align-middle"></i> Store New
             </a>
         </div>
         <div class="space-y-4">{}</div>"##,
@@ -224,7 +224,7 @@ pub async fn search_results(
         };
         return Html(format!(
             r##"<div class="text-center py-12">
-                <div class="text-4xl mb-4">🔍</div>
+                <div class="text-4xl mb-4"><i data-lucide="search-x" class="w-12 h-12 mx-auto text-gray-400"></i></div>
                 <div class="text-gray-400">No memories found for "{}"{}</div>
             </div>"##, 
             html_escape(&form.query),
@@ -277,7 +277,7 @@ pub async fn store_submit(
     Form(form): Form<StoreForm>,
 ) -> Html<String> {
     if form.content.is_empty() {
-        return Html(r#"<div class="text-red-400 p-4 rounded-xl bg-red-900/30 border border-red-700">❌ Content is required</div>"#.to_string());
+        return Html(r#"<div class="text-red-400 p-4 rounded-xl bg-red-900/30 border border-red-700"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Content is required</div>"#.to_string());
     }
     
     let mut brain = state.brain.write().await;
@@ -299,7 +299,7 @@ pub async fn store_submit(
             crate::audit::log_store(&form.content, &item.tags);
             Html(format!(
                 r##"<div class="text-green-400 p-4 rounded-xl bg-green-900/30 border border-green-700">
-                    ✅ Memory stored! ID: <span class="font-mono">{}</span>
+                    <i data-lucide="check-circle" class="w-4 h-4 inline-block align-middle"></i> Memory stored! ID: <span class="font-mono">{}</span>
                 </div>
                 <script>setTimeout(() => document.querySelector('form').reset(), 100);</script>"##,
                 &item.id.to_string()[..8]
@@ -307,7 +307,7 @@ pub async fn store_submit(
         }
         Err(e) => {
             Html(format!(
-                r##"<div class="text-red-400 p-4 rounded-xl bg-red-900/30 border border-red-700">❌ Error: {}</div>"##,
+                r##"<div class="text-red-400 p-4 rounded-xl bg-red-900/30 border border-red-700"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Error: {}</div>"##,
                 e
             ))
         }
@@ -323,12 +323,12 @@ pub async fn visual_page() -> Html<String> {
     let clip_status = match ureq::get("http://localhost:5050/health").call() {
         Ok(resp) => {
             if resp.status() == 200 {
-                "🟢 Connected"
+                "<span class=\"w-2 h-2 rounded-full bg-green-500 inline-block\"></span> Connected"
             } else {
-                "🟡 Error"
+                "<span class=\"w-2 h-2 rounded-full bg-yellow-500 inline-block\"></span> Error"
             }
         }
-        Err(_) => "🔴 Offline"
+        Err(_) => "<span class=\"w-2 h-2 rounded-full bg-red-500 inline-block\"></span> Offline"
     };
     
     // Load photos index to get count and recent photos
@@ -348,7 +348,7 @@ pub async fn visual_page() -> Html<String> {
             gallery.push_str(&format!(
                 r##"<div class="bg-gray-800/50 rounded-xl p-2 border border-gray-700">
                     <div class="aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
-                        <img src="/api/visual/thumb?path={}" alt="{}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='🖼️'" />
+                        <img src="/api/visual/thumb?path={}" alt="{}" class="w-full h-full object-cover" onerror="this.style.display='none'" />
                     </div>
                     <div class="text-xs text-gray-400 truncate">{}</div>
                     {}
@@ -356,7 +356,7 @@ pub async fn visual_page() -> Html<String> {
                 urlencoding::encode(path),
                 html_escape(filename),
                 html_escape(filename),
-                if !place.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate">📍 {}</div>"#, html_escape(place)) } else { String::new() }
+                if !place.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate"><i data-lucide="map-pin" class="w-3 h-3 inline-block align-middle"></i> {}</div>"#, html_escape(place)) } else { String::new() }
             ));
         }
         
@@ -367,7 +367,7 @@ pub async fn visual_page() -> Html<String> {
         }
     } else {
         ("0".to_string(), r#"<div class="col-span-4 text-center text-gray-500 py-12">
-            <div class="text-4xl mb-4">🖼️</div>
+            <div class="text-4xl mb-4"><i data-lucide="image-off" class="w-12 h-12 mx-auto text-gray-400"></i></div>
             <div>No photos indexed yet</div>
             <div class="text-sm mt-2">Run: <code class="bg-gray-700 px-2 py-1 rounded">python photos_sync.py sync --limit 100</code></div>
         </div>"#.to_string())
@@ -415,7 +415,7 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
         Err(e) => {
             return Html(format!(
                 r##"<div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4">
-                    <div class="text-yellow-400">⚠️ CLIP server not available</div>
+                    <div class="text-yellow-400"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
                     <div class="text-gray-400 text-sm mt-2">Start it with: <code class="bg-gray-700 px-2 py-1 rounded">python clip_server.py 5050</code></div>
                 </div>"##
             ));
@@ -443,7 +443,7 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
     
     // Build results HTML
     let mut html = format!(
-        r#"<div class="text-gray-400 text-sm mb-4">🔍 Found {} photos for "{}"</div>
+        r#"<div class="text-gray-400 text-sm mb-4"><i data-lucide="search" class="w-4 h-4 inline-block align-middle"></i> Found {} photos for "{}"</div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">"#,
         scored.len().min(12),
         html_escape(&form.query)
@@ -461,7 +461,7 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
         html.push_str(&format!(
             r##"<div class="bg-gray-800/50 rounded-xl p-3 border border-gray-700 hover:border-pink-500/50 transition">
                 <div class="aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
-                    <img src="/api/visual/thumb?path={}" alt="{}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='🖼️'" />
+                    <img src="/api/visual/thumb?path={}" alt="{}" class="w-full h-full object-cover" onerror="this.style.display='none'" />
                 </div>
                 <div class="text-sm text-gray-300 truncate">{}</div>
                 <div class="text-xs text-pink-400">{:.1}% match</div>
@@ -472,8 +472,8 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
             html_escape(filename),
             html_escape(filename),
             sim * 100.0,
-            if !place.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate">📍 {}</div>"#, html_escape(place)) } else { String::new() },
-            if !persons.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate">👤 {}</div>"#, persons.join(", ")) } else { String::new() }
+            if !place.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate"><i data-lucide="map-pin" class="w-3 h-3 inline-block align-middle"></i> {}</div>"#, html_escape(place)) } else { String::new() },
+            if !persons.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate"><i data-lucide="user" class="w-3 h-3 inline-block align-middle"></i> {}</div>"#, persons.join(", ")) } else { String::new() }
         ));
     }
     
@@ -524,7 +524,7 @@ pub async fn visual_store(Form(form): Form<VisualStoreForm>) -> Html<String> {
                 let tags: Vec<&str> = form.tags.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                 Html(format!(
                     r##"<div class="bg-green-900/30 border border-green-700 rounded-xl p-4">
-                        <div class="text-green-400">✅ Visual memory stored!</div>
+                        <div class="text-green-400"><i data-lucide="check-circle" class="w-4 h-4 inline-block align-middle"></i> Visual memory stored!</div>
                         <div class="text-gray-400 text-sm mt-2">Path: {}</div>
                         <div class="text-gray-400 text-sm">Description: {}</div>
                         {}
@@ -543,7 +543,7 @@ pub async fn visual_store(Form(form): Form<VisualStoreForm>) -> Html<String> {
         Err(e) => {
             Html(format!(
                 r##"<div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4">
-                    <div class="text-yellow-400">⚠️ CLIP server not available</div>
+                    <div class="text-yellow-400"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
                     <div class="text-gray-400 text-sm mt-2">Error: {}</div>
                 </div>"##,
                 e
@@ -607,7 +607,7 @@ pub async fn mindmap_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let memory_count = brain.semantic.search("", 10000).map(|v| v.len()).unwrap_or(0);
     
     let content = format!(r##"
-<h1 class="text-4xl font-bold mb-4">🕸️ Memory Mind Map</h1>
+<h1 class="text-4xl font-bold mb-4"><i data-lucide="network" class="w-8 h-8 inline-block align-middle"></i> Memory Mind Map</h1>
 <p class="text-gray-400 mb-6">기억들의 연결을 시각적으로 탐색하세요. 노드를 드래그하거나 줌/패닝할 수 있습니다.</p>
 
 <div class="flex gap-4 mb-6">
@@ -630,7 +630,7 @@ pub async fn mindmap_page(State(state): State<Arc<AppState>>) -> Html<String> {
         </select>
     </div>
     <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700 text-cyan-400">
-        🧠 {memory_count} memories
+        <i data-lucide="brain" class="w-4 h-4 inline-block align-middle"></i> {memory_count} memories
     </div>
 </div>
 
@@ -796,7 +796,7 @@ pub async fn mindmap_data(
 /// Timeline page - memories over time
 pub async fn timeline_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let content = r##"
-<h1 class="text-4xl font-bold mb-4">📅 Memory Timeline</h1>
+<h1 class="text-4xl font-bold mb-4"><i data-lucide="calendar" class="w-8 h-8 inline-block align-middle"></i> Memory Timeline</h1>
 <p class="text-gray-400 mb-6">시간 순으로 기억의 흐름을 확인하세요.</p>
 
 <div id="timeline-container" class="space-y-1" hx-get="/timeline/data" hx-trigger="load" hx-swap="innerHTML">
@@ -869,7 +869,7 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
                             <div class="flex items-center gap-3 mt-2 text-xs">
                                 <span class="bg-{color}-900/50 text-{color}-400 px-2 py-0.5 rounded">{type_name}</span>
                                 <span class="text-gray-500">{time}</span>
-                                <span class="text-gray-500">💪 {strength}%</span>
+                                <span class="text-gray-500"><i data-lucide="gauge" class="w-3 h-3 inline-block align-middle"></i> {strength}%</span>
                                 {tags}
                             </div>
                         </div>
@@ -896,21 +896,21 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
 /// CoreDB Browser page
 pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let content = r##"
-<h1 class="text-4xl font-bold mb-4">💾 CoreDB Browser</h1>
+<h1 class="text-4xl font-bold mb-4"><i data-lucide="database" class="w-8 h-8 inline-block align-middle"></i> CoreDB Browser</h1>
 <p class="text-gray-400 mb-6">CoreDB에 저장된 데이터를 직접 조회하세요. CQL 쿼리를 실행할 수 있습니다.</p>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Query Panel -->
     <div class="lg:col-span-2">
         <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-            <h2 class="text-xl font-semibold mb-4 text-emerald-400">🔍 CQL Query</h2>
+            <h2 class="text-xl font-semibold mb-4 text-emerald-400"><i data-lucide="terminal" class="w-5 h-5 inline-block align-middle"></i> CQL Query</h2>
             <form hx-post="/coredb/query" hx-target="#results" hx-swap="innerHTML" hx-indicator="#loading">
                 <textarea name="query" rows="3" 
                     class="w-full bg-gray-900 text-emerald-300 font-mono rounded-lg p-4 border border-gray-600 focus:border-emerald-500 focus:outline-none resize-y"
                     placeholder="SELECT * FROM memory_brain.semantic LIMIT 10">SELECT * FROM memory_brain.semantic LIMIT 20</textarea>
                 <div class="flex gap-3 mt-3">
                     <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition font-semibold">
-                        ▶ Execute
+                        <i data-lucide="play" class="w-4 h-4 inline-block align-middle"></i> Execute
                     </button>
                     <span id="loading" class="htmx-indicator text-gray-400 py-2">실행 중...</span>
                 </div>
@@ -935,7 +935,7 @@ pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
     <!-- Info Panel -->
     <div class="space-y-4">
         <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-            <h3 class="text-lg font-semibold text-emerald-400 mb-3">📋 Tables</h3>
+            <h3 class="text-lg font-semibold text-emerald-400 mb-3"><i data-lucide="table-2" class="w-5 h-5 inline-block align-middle"></i> Tables</h3>
             <div class="space-y-2 text-sm">
                 <div class="flex justify-between text-gray-300">
                     <span>memory_brain.episodic</span>
@@ -957,7 +957,7 @@ pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
         </div>
         
         <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-            <h3 class="text-lg font-semibold text-emerald-400 mb-3">📖 CQL Guide</h3>
+            <h3 class="text-lg font-semibold text-emerald-400 mb-3"><i data-lucide="book-open" class="w-5 h-5 inline-block align-middle"></i> CQL Guide</h3>
             <div class="text-sm text-gray-400 space-y-2 font-mono">
                 <p>SELECT * FROM ks.table</p>
                 <p>SELECT * FROM ks.table LIMIT n</p>
@@ -1002,7 +1002,7 @@ pub async fn coredb_query(
             Html(format!(
                 r##"<div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-emerald-400">📊 Results</h3>
+                        <h3 class="text-lg font-semibold text-emerald-400"><i data-lucide="table" class="w-5 h-5 inline-block align-middle"></i> Results</h3>
                         <span class="text-xs text-gray-500 font-mono">{}</span>
                     </div>
                     <div class="overflow-x-auto">
@@ -1016,7 +1016,7 @@ pub async fn coredb_query(
         Err(e) => {
             Html(format!(
                 r##"<div class="bg-red-900/30 rounded-xl p-4 border border-red-700">
-                    <div class="text-red-400 font-semibold">❌ Error</div>
+                    <div class="text-red-400 font-semibold"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Error</div>
                     <div class="text-red-300 text-sm mt-2 font-mono">{}</div>
                     <div class="text-gray-500 text-xs mt-2">Query: {}</div>
                 </div>"##,

@@ -1,4 +1,4 @@
-<h1 class="text-4xl font-bold mb-8">🔍 Search Memories</h1>
+<h1 class="text-4xl font-bold mb-8"><i data-lucide="search" class="w-8 h-8 inline-block align-middle"></i> Search Memories</h1>
 
 <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 mb-6">
     <form hx-post="/search/results" hx-target="#results" hx-swap="innerHTML" class="space-y-4">
@@ -65,10 +65,10 @@
 <!-- 자주 쓰는 태그 -->
 <div class="mb-6">
     <span class="text-gray-400 text-sm mr-2">Quick tags:</span>
-    <button onclick="document.querySelector('input[name=tags]').value='news'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">📰 news</button>
-    <button onclick="document.querySelector('input[name=tags]').value='stock'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">📈 stock</button>
-    <button onclick="document.querySelector('input[name=tags]').value='clawdbot'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">🤖 clawdbot</button>
-    <button onclick="document.querySelector('input[name=tags]').value='pekko'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm">🦊 pekko</button>
+    <button onclick="document.querySelector('input[name=tags]').value='news'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">news</button>
+    <button onclick="document.querySelector('input[name=tags]').value='stock'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">stock</button>
+    <button onclick="document.querySelector('input[name=tags]').value='clawdbot'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm mr-2">clawdbot</button>
+    <button onclick="document.querySelector('input[name=tags]').value='pekko'" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-lg text-sm">pekko</button>
 </div>
 
 <div id="results" class="space-y-4"></div>

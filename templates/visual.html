@@ -1,25 +1,25 @@
-<h1 class="text-4xl font-bold mb-8">🖼️ Visual Memory</h1>
+<h1 class="text-4xl font-bold mb-8"><i data-lucide="image" class="w-8 h-8 inline-block align-middle"></i> Visual Memory</h1>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <div class="bg-gradient-to-br from-pink-900/50 to-pink-800/30 rounded-2xl p-6 border border-pink-700/50">
-        <div class="text-pink-400 text-sm">📷 Total Images</div>
+        <div class="text-pink-400 text-sm"><i data-lucide="camera" class="w-4 h-4 inline-block align-middle"></i> Total Images</div>
         <div class="text-4xl font-bold text-pink-300 mt-2">{{TOTAL_IMAGES}}</div>
     </div>
     
     <div class="bg-gradient-to-br from-purple-900/50 to-purple-800/30 rounded-2xl p-6 border border-purple-700/50">
-        <div class="text-purple-400 text-sm">🔗 CLIP Server</div>
+        <div class="text-purple-400 text-sm"><i data-lucide="link" class="w-4 h-4 inline-block align-middle"></i> CLIP Server</div>
         <div class="text-xl font-bold text-purple-300 mt-2">{{CLIP_STATUS}}</div>
     </div>
     
     <div class="bg-gradient-to-br from-indigo-900/50 to-indigo-800/30 rounded-2xl p-6 border border-indigo-700/50">
-        <div class="text-indigo-400 text-sm">📐 Embedding Dim</div>
+        <div class="text-indigo-400 text-sm"><i data-lucide="ruler" class="w-4 h-4 inline-block align-middle"></i> Embedding Dim</div>
         <div class="text-4xl font-bold text-indigo-300 mt-2">512</div>
     </div>
 </div>
 
 <!-- Search by Text -->
 <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 mb-8">
-    <h2 class="text-xl font-semibold mb-4">🔍 Search Images by Text</h2>
+    <h2 class="text-xl font-semibold mb-4"><i data-lucide="search" class="w-5 h-5 inline-block align-middle"></i> Search Images by Text</h2>
     <form hx-post="/api/visual/search" hx-target="#search-results" hx-swap="innerHTML" class="flex gap-4">
         <input 
             type="text" 
@@ -36,7 +36,7 @@
 
 <!-- Upload Image -->
 <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 mb-8">
-    <h2 class="text-xl font-semibold mb-4">📤 Store New Image</h2>
+    <h2 class="text-xl font-semibold mb-4"><i data-lucide="upload" class="w-5 h-5 inline-block align-middle"></i> Store New Image</h2>
     <form hx-post="/api/visual/store" hx-target="#upload-result" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -68,7 +68,7 @@
             />
         </div>
         <button type="submit" class="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 px-8 py-3 rounded-xl transition font-semibold">
-            🧠 Store Visual Memory
+            <i data-lucide="brain" class="w-4 h-4 inline-block align-middle"></i> Store Visual Memory
         </button>
     </form>
     <div id="upload-result" class="mt-4"></div>
@@ -76,7 +76,7 @@
 
 <!-- Image Gallery -->
 <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-    <h2 class="text-xl font-semibold mb-4">🗂️ Recent Visual Memories</h2>
+    <h2 class="text-xl font-semibold mb-4"><i data-lucide="folder-open" class="w-5 h-5 inline-block align-middle"></i> Recent Visual Memories</h2>
     <div id="gallery" class="grid grid-cols-2 md:grid-cols-4 gap-4">
         {{GALLERY}}
     </div>
