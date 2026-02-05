@@ -59,6 +59,11 @@ impl SemanticMemory {
         self.storage.get_by_tag(tag)
     }
 
+    /// Execute arbitrary CQL query and return HTML results
+    pub fn execute_cql_html(&self, query: &str) -> Result<String, String> {
+        self.storage.execute_cql_html(query)
+    }
+
     /// Apply forgetting (semantic memories decay slower)
     pub fn apply_forgetting(&mut self, curve: &ForgettingCurve) -> Result<(), Box<dyn std::error::Error>> {
         let all = self.storage.get_all()?;

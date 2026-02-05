@@ -893,6 +893,144 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
     Html(html)
 }
 
+/// CoreDB Browser page
+pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
+    let content = r##"
+<h1 class="text-4xl font-bold mb-4">💾 CoreDB Browser</h1>
+<p class="text-gray-400 mb-6">CoreDB에 저장된 데이터를 직접 조회하세요. CQL 쿼리를 실행할 수 있습니다.</p>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Query Panel -->
+    <div class="lg:col-span-2">
+        <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+            <h2 class="text-xl font-semibold mb-4 text-emerald-400">🔍 CQL Query</h2>
+            <form hx-post="/coredb/query" hx-target="#results" hx-swap="innerHTML" hx-indicator="#loading">
+                <textarea name="query" rows="3" 
+                    class="w-full bg-gray-900 text-emerald-300 font-mono rounded-lg p-4 border border-gray-600 focus:border-emerald-500 focus:outline-none resize-y"
+                    placeholder="SELECT * FROM memory_brain.memories LIMIT 10">SELECT * FROM memory_brain.memories LIMIT 20</textarea>
+                <div class="flex gap-3 mt-3">
+                    <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition font-semibold">
+                        ▶ Execute
+                    </button>
+                    <span id="loading" class="htmx-indicator text-gray-400 py-2">실행 중...</span>
+                </div>
+            </form>
+            
+            <div class="mt-3 text-xs text-gray-500">
+                Quick queries:
+                <button onclick="setQuery('SELECT * FROM memory_brain.memories LIMIT 20')" class="text-emerald-500 hover:underline ml-2">All memories</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.episodic LIMIT 20')" class="text-blue-500 hover:underline ml-2">Episodic</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-cyan-500 hover:underline ml-2">Semantic</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.procedural LIMIT 20')" class="text-purple-500 hover:underline ml-2">Procedural</button>
+                <button onclick="setQuery('SELECT * FROM visual_brain.visual_memories LIMIT 20')" class="text-pink-500 hover:underline ml-2">Visual</button>
+            </div>
+        </div>
+        
+        <!-- Results -->
+        <div id="results" class="mt-6">
+            <div class="text-gray-500 text-center py-8">쿼리를 실행하면 결과가 여기에 표시됩니다.</div>
+        </div>
+    </div>
+    
+    <!-- Info Panel -->
+    <div class="space-y-4">
+        <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+            <h3 class="text-lg font-semibold text-emerald-400 mb-3">📋 Tables</h3>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between text-gray-300">
+                    <span>memory_brain.memories</span>
+                    <span class="text-gray-500">모든 기억</span>
+                </div>
+                <div class="flex justify-between text-gray-300">
+                    <span>memory_brain.episodic</span>
+                    <span class="text-gray-500">일화 기억</span>
+                </div>
+                <div class="flex justify-between text-gray-300">
+                    <span>memory_brain.semantic</span>
+                    <span class="text-gray-500">의미 기억</span>
+                </div>
+                <div class="flex justify-between text-gray-300">
+                    <span>memory_brain.procedural</span>
+                    <span class="text-gray-500">절차 기억</span>
+                </div>
+                <div class="flex justify-between text-gray-300">
+                    <span>visual_brain.visual_memories</span>
+                    <span class="text-gray-500">시각 기억</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+            <h3 class="text-lg font-semibold text-emerald-400 mb-3">📖 CQL Guide</h3>
+            <div class="text-sm text-gray-400 space-y-2 font-mono">
+                <p>SELECT * FROM ks.table</p>
+                <p>SELECT * FROM ks.table LIMIT n</p>
+                <p>SELECT * FROM ks.table WHERE id = 'xxx'</p>
+                <p>INSERT INTO ks.table (...) VALUES (...)</p>
+                <p>DELETE FROM ks.table WHERE id = 'xxx'</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setQuery(q) {
+    document.querySelector('textarea[name=query]').value = q;
+}
+</script>
+"##;
+
+    Html(render_page("CoreDB Browser", content))
+}
+
+/// Execute CQL query (HTMX endpoint)
+#[derive(Deserialize)]
+pub struct CqlQueryForm {
+    query: String,
+}
+
+pub async fn coredb_query(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<CqlQueryForm>,
+) -> Html<String> {
+    let brain = state.brain.read().await;
+    let query = form.query.trim();
+    
+    if query.is_empty() {
+        return Html(r#"<div class="text-red-400">쿼리를 입력하세요.</div>"#.to_string());
+    }
+    
+    // Execute CQL through the brain's storage
+    match brain.storage_execute_cql(query) {
+        Ok(result) => {
+            Html(format!(
+                r##"<div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-emerald-400">📊 Results</h3>
+                        <span class="text-xs text-gray-500 font-mono">{}</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        {}
+                    </div>
+                </div>"##,
+                html_escape(query),
+                result
+            ))
+        }
+        Err(e) => {
+            Html(format!(
+                r##"<div class="bg-red-900/30 rounded-xl p-4 border border-red-700">
+                    <div class="text-red-400 font-semibold">❌ Error</div>
+                    <div class="text-red-300 text-sm mt-2 font-mono">{}</div>
+                    <div class="text-gray-500 text-xs mt-2">Query: {}</div>
+                </div>"##,
+                html_escape(&e),
+                html_escape(query),
+            ))
+        }
+    }
+}
+
 /// Create web UI router
 pub fn create_web_router() -> Router<Arc<AppState>> {
     Router::new()
@@ -903,6 +1041,8 @@ pub fn create_web_router() -> Router<Arc<AppState>> {
         .route("/mindmap/data", get(mindmap_data))
         .route("/timeline", get(timeline_page))
         .route("/timeline/data", get(timeline_data))
+        .route("/coredb", get(coredb_page))
+        .route("/coredb/query", axum::routing::post(coredb_query))
         .route("/search", get(search_page))
         .route("/search/results", axum::routing::post(search_results))
         .route("/store", get(store_page))

@@ -255,6 +255,82 @@ impl Storage {
     }
 
     /// Add association between memories
+    /// Execute arbitrary CQL query and return HTML-formatted results
+    pub fn execute_cql_html(&self, query: &str) -> Result<String, String> {
+        use tokio::runtime::Handle;
+        
+        let db = self.db.clone();
+        let query = query.to_string();
+        
+        let result = if Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| {
+                Handle::current().block_on(async {
+                    let db = db.read().await;
+                    db.execute_cql(&query).await
+                })
+            })
+        } else {
+            return Err("No async runtime available".to_string());
+        };
+        
+        match result {
+            Ok(coredb::QueryResult::Rows(rows)) => {
+                if rows.is_empty() {
+                    return Ok("<div class=\"text-gray-400\">No rows returned.</div>".to_string());
+                }
+                
+                // Get column names from first row
+                let columns: Vec<&String> = rows[0].columns.keys().collect();
+                
+                let mut html = String::from(
+                    "<table class=\"w-full text-sm\"><thead><tr class=\"border-b border-gray-600\">"
+                );
+                for col in &columns {
+                    html.push_str(&format!(
+                        "<th class=\"px-3 py-2 text-left text-emerald-400 font-mono\">{}</th>", col
+                    ));
+                }
+                html.push_str("</tr></thead><tbody>");
+                
+                for (i, row) in rows.iter().enumerate() {
+                    let bg = if i % 2 == 0 { "bg-gray-800/30" } else { "" };
+                    html.push_str(&format!("<tr class=\"border-b border-gray-700/50 {}\">", bg));
+                    for col in &columns {
+                        let val = row.columns.get(*col)
+                            .map(|v| format!("{:?}", v))
+                            .unwrap_or_else(|| "NULL".to_string());
+                        // Truncate long values
+                        let display = if val.len() > 100 {
+                            format!("{}...", &val[..100])
+                        } else {
+                            val
+                        };
+                        html.push_str(&format!(
+                            "<td class=\"px-3 py-2 text-gray-300 font-mono text-xs max-w-xs truncate\">{}</td>",
+                            display.replace('<', "&lt;").replace('>', "&gt;")
+                        ));
+                    }
+                    html.push_str("</tr>");
+                }
+                
+                html.push_str("</tbody></table>");
+                html.push_str(&format!(
+                    "<div class=\"text-xs text-gray-500 mt-3\">{} rows returned</div>",
+                    rows.len()
+                ));
+                
+                Ok(html)
+            }
+            Ok(coredb::QueryResult::Success) => {
+                Ok("<div class=\"text-emerald-400\">✅ Query executed successfully.</div>".to_string())
+            }
+            Ok(other) => {
+                Ok(format!("<div class=\"text-gray-300\">{:?}</div>", other))
+            }
+            Err(e) => Err(format!("{}", e)),
+        }
+    }
+
     pub fn add_association(&self, _from_id: Uuid, _to_id: Uuid) -> Result<(), Box<dyn std::error::Error>> {
         // TODO: Implement associations table in CoreDB
         Ok(())

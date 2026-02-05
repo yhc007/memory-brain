@@ -48,6 +48,9 @@ pub mod clip_onnx;
 pub mod visual_storage;
 pub mod vlm;
 
+// Hippocampus - memory formation, replay, episode chains, auto-importance
+pub mod hippocampus;
+
 // coredb_storage merged into storage.rs
 
 pub use types::*;
@@ -344,6 +347,50 @@ impl Brain {
     /// Rebuild keyword index and bloom filter from existing memories
     /// 
     /// Call this after loading a database to populate the in-memory indexes.
+    /// Update the strength of a memory by its ID (partial match)
+    pub fn update_strength(&mut self, id_prefix: &str, new_strength: f32) -> Result<(), Box<dyn std::error::Error>> {
+        let strength = new_strength.clamp(0.0, 1.0);
+        
+        // Search through all memory stores
+        // Check episodic
+        if let Ok(items) = self.episodic.search("", 100000) {
+            for mut item in items {
+                if item.id.to_string().starts_with(id_prefix) {
+                    item.strength = strength;
+                    let _ = self.episodic.store(item);
+                    return Ok(());
+                }
+            }
+        }
+        // Check semantic
+        if let Ok(items) = self.semantic.search("", 100000) {
+            for mut item in items {
+                if item.id.to_string().starts_with(id_prefix) {
+                    item.strength = strength;
+                    let _ = self.semantic.store(item);
+                    return Ok(());
+                }
+            }
+        }
+        // Check procedural
+        if let Ok(items) = self.procedural.search("", 100000) {
+            for mut item in items {
+                if item.id.to_string().starts_with(id_prefix) {
+                    item.strength = strength;
+                    let _ = self.procedural.store(item);
+                    return Ok(());
+                }
+            }
+        }
+        
+        Err(format!("Memory not found: {}", id_prefix).into())
+    }
+
+    /// Execute CQL query through the underlying CoreDB (via semantic store's storage)
+    pub fn storage_execute_cql(&self, query: &str) -> Result<String, String> {
+        self.semantic.execute_cql_html(query)
+    }
+
     pub fn rebuild_indexes(&mut self) -> Result<RebuildStats, Box<dyn std::error::Error>> {
         let mut stats = RebuildStats::default();
 
