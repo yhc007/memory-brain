@@ -41,69 +41,81 @@ pub async fn dashboard_page(State(state): State<Arc<AppState>>) -> Html<String> 
     let search_pct = if total > 0 { searches * 100 / total } else { 0 };
     
     let content = format!(
-        r##"<h1 class="text-4xl font-bold mb-8"><i data-lucide="layout-dashboard" class="w-6 h-6 inline-block align-middle"></i> Dashboard</h1>
+        r##"<div class="mb-6 sm:mb-8">
+    <h1 class="text-xl sm:text-2xl font-semibold tracking-tight">Dashboard</h1>
+    <p class="text-zinc-500 text-sm mt-1">Memory Brain overview and activity</p>
+</div>
 
-<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-    <div class="bg-gradient-to-br from-green-900/50 to-green-800/30 rounded-2xl p-6 border border-green-700/50 glow-green">
-        <div class="text-green-400 text-sm"><i data-lucide="archive" class="w-4 h-4 inline-block align-middle"></i> Stores Today</div>
-        <div class="text-4xl font-bold text-green-300 mt-2">{}</div>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+    <div class="stat-card">
+        <div class="flex items-center gap-1.5 text-zinc-500 text-xs font-medium uppercase tracking-wider mb-2">
+            <i data-lucide="archive" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Stores</span><span class="sm:hidden">Store</span>
+        </div>
+        <div class="text-2xl sm:text-3xl font-semibold text-zinc-100">{}</div>
+        <div class="text-xs text-zinc-600 mt-1">today</div>
     </div>
-    
-    <div class="bg-gradient-to-br from-blue-900/50 to-blue-800/30 rounded-2xl p-6 border border-blue-700/50">
-        <div class="text-blue-400 text-sm"><i data-lucide="search" class="w-4 h-4 inline-block align-middle"></i> Recalls Today</div>
-        <div class="text-4xl font-bold text-blue-300 mt-2">{}</div>
+    <div class="stat-card">
+        <div class="flex items-center gap-1.5 text-zinc-500 text-xs font-medium uppercase tracking-wider mb-2">
+            <i data-lucide="search" class="w-3.5 h-3.5"></i> Recalls
+        </div>
+        <div class="text-2xl sm:text-3xl font-semibold text-zinc-100">{}</div>
+        <div class="text-xs text-zinc-600 mt-1">today</div>
     </div>
-    
-    <div class="bg-gradient-to-br from-yellow-900/50 to-yellow-800/30 rounded-2xl p-6 border border-yellow-700/50">
-        <div class="text-yellow-400 text-sm"><i data-lucide="filter" class="w-4 h-4 inline-block align-middle"></i> Searches Today</div>
-        <div class="text-4xl font-bold text-yellow-300 mt-2">{}</div>
+    <div class="stat-card">
+        <div class="flex items-center gap-1.5 text-zinc-500 text-xs font-medium uppercase tracking-wider mb-2">
+            <i data-lucide="filter" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Searches</span><span class="sm:hidden">Search</span>
+        </div>
+        <div class="text-2xl sm:text-3xl font-semibold text-zinc-100">{}</div>
+        <div class="text-xs text-zinc-600 mt-1">today</div>
     </div>
-    
-    <div class="bg-gradient-to-br from-cyan-900/50 to-cyan-800/30 rounded-2xl p-6 border border-cyan-700/50 glow">
-        <div class="text-cyan-400 text-sm"><i data-lucide="brain" class="w-4 h-4 inline-block align-middle"></i> Total Memories</div>
-        <div class="text-4xl font-bold text-cyan-300 mt-2">{}</div>
+    <div class="stat-card glow-subtle">
+        <div class="flex items-center gap-1.5 text-indigo-400 text-xs font-medium uppercase tracking-wider mb-2">
+            <i data-lucide="brain" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Memories</span><span class="sm:hidden">Total</span>
+        </div>
+        <div class="text-2xl sm:text-3xl font-semibold text-zinc-100">{}</div>
+        <div class="text-xs text-zinc-600 mt-1">total</div>
     </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div class="card p-6">
-        <h2 class="text-xl font-semibold mb-4"><i data-lucide="trending-up" class="w-5 h-5 inline-block align-middle"></i> Today's Activity</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+    <div class="card p-4 sm:p-6">
+        <h2 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">Activity</h2>
         <div class="space-y-3">
             <div class="flex items-center gap-3">
-                <span class="text-green-400 w-24">Stores</span>
-                <div class="flex-1 h-4 bg-gray-700 rounded-full overflow-hidden">
-                    <div class="h-full bg-green-500 rounded-full" style="width: {}%"></div>
+                <span class="text-zinc-400 text-sm w-16 sm:w-20">Stores</span>
+                <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: {}%"></div>
                 </div>
-                <span class="text-gray-400 w-12 text-right">{}</span>
+                <span class="text-zinc-500 text-xs mono w-8 text-right">{}</span>
             </div>
             <div class="flex items-center gap-3">
-                <span class="text-blue-400 w-24">Recalls</span>
-                <div class="flex-1 h-4 bg-gray-700 rounded-full overflow-hidden">
-                    <div class="h-full bg-blue-500 rounded-full" style="width: {}%"></div>
+                <span class="text-zinc-400 text-sm w-16 sm:w-20">Recalls</span>
+                <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-blue-500 rounded-full transition-all" style="width: {}%"></div>
                 </div>
-                <span class="text-gray-400 w-12 text-right">{}</span>
+                <span class="text-zinc-500 text-xs mono w-8 text-right">{}</span>
             </div>
             <div class="flex items-center gap-3">
-                <span class="text-yellow-400 w-24">Searches</span>
-                <div class="flex-1 h-4 bg-gray-700 rounded-full overflow-hidden">
-                    <div class="h-full bg-yellow-500 rounded-full" style="width: {}%"></div>
+                <span class="text-zinc-400 text-sm w-16 sm:w-20">Searches</span>
+                <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-500 rounded-full transition-all" style="width: {}%"></div>
                 </div>
-                <span class="text-gray-400 w-12 text-right">{}</span>
+                <span class="text-zinc-500 text-xs mono w-8 text-right">{}</span>
             </div>
         </div>
     </div>
     
-    <div class="card p-6">
-        <h2 class="text-xl font-semibold mb-4"><i data-lucide="zap" class="w-5 h-5 inline-block align-middle"></i> Quick Actions</h2>
-        <div class="flex flex-wrap gap-3">
-            <a href="/store" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl transition">
-                <i data-lucide="plus-circle" class="w-6 h-6 inline-block align-middle"></i> Store Memory
+    <div class="card p-4 sm:p-6">
+        <h2 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">Quick Actions</h2>
+        <div class="flex flex-wrap gap-2">
+            <a href="/store" class="flex items-center gap-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Store
             </a>
-            <a href="/search" class="bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-xl transition">
-                <i data-lucide="search" class="w-4 h-4 inline-block align-middle"></i> Search
+            <a href="/search" class="flex items-center gap-2 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                <i data-lucide="search" class="w-3.5 h-3.5"></i> Search
             </a>
-            <a href="/memories" class="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded-xl transition">
-                <i data-lucide="list" class="w-4 h-4 inline-block align-middle"></i> Browse All
+            <a href="/memories" class="flex items-center gap-2 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                <i data-lucide="list" class="w-3.5 h-3.5"></i> Browse
             </a>
         </div>
     </div>
@@ -142,7 +154,7 @@ pub async fn memories_page(State(state): State<Arc<AppState>>) -> Html<String> {
     }
     
     let content = format!(
-        r##"<div class="flex justify-between items-center mb-8">
+        r##"<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
             <div>
                 <h1 class="text-2xl font-semibold tracking-tight">Memories</h1>
                 <p class="text-zinc-500 text-sm mt-1">All stored memories</p>
@@ -613,7 +625,7 @@ pub async fn mindmap_page(State(state): State<Arc<AppState>>) -> Html<String> {
 <div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">Mind Map</h1>
 <p class="text-zinc-500 text-sm mt-1">기억들의 연결을 시각적으로 탐색하세요. 노드를 드래그하거나 줌/패닝할 수 있습니다.</p>
 
-<div class="flex gap-4 mb-6">
+<div class="flex flex-wrap gap-2 sm:gap-4 mb-4 sm:mb-6">
     <div class="card px-3 py-2">
         <span class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Threshold</span>
         <select id="threshold" onchange="loadMindMap()" class="bg-[#19191c] text-zinc-300 rounded-lg px-2 py-1 ml-2 text-sm border border-[#2a2a2e]">
@@ -845,7 +857,7 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
         
         html.push_str(&format!(
             r##"<div class="mb-8">
-                <div class="flex items-center gap-3 mb-4">
+                <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                     <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
                     <h2 class="text-base font-semibold text-zinc-200">{}</h2>
                     <span class="text-zinc-500 text-sm">{}</span>
@@ -904,7 +916,7 @@ pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
     <p class="text-zinc-500 text-sm mt-1">Execute CQL queries against the memory store</p>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
     <!-- Query Panel -->
     <div class="lg:col-span-2">
         <div class="card p-6">
