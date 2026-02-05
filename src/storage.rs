@@ -299,9 +299,9 @@ impl Storage {
                         let val = row.columns.get(*col)
                             .map(|v| format!("{:?}", v))
                             .unwrap_or_else(|| "NULL".to_string());
-                        // Truncate long values
-                        let display = if val.len() > 100 {
-                            format!("{}...", &val[..100])
+                        // Truncate long values (char-safe for Unicode)
+                        let display = if val.chars().count() > 100 {
+                            format!("{}...", val.chars().take(100).collect::<String>())
                         } else {
                             val
                         };
