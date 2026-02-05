@@ -1867,27 +1867,41 @@ fn cmd_sam(args: &[String], db_path: &str, quiet: bool) -> Result<(), Box<dyn st
 
 fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     use memory_brain::clip_onnx::{MockClipProvider, ClipServerProvider};
-    use memory_brain::visual::{ClipProvider, VisualMemory};
+    use memory_brain::visual::{ClipProvider, VisualMemory, VisualContext, ImageSource, cosine_similarity};
+    use memory_brain::visual_storage::VisualStorage;
+    use memory_brain::vlm::{OllamaVlm, VlmProvider};
     use std::sync::Arc;
+    use tokio::sync::RwLock;
     
     // Default CLIP server URL
     let server_url = std::env::var("CLIP_SERVER_URL")
         .unwrap_or_else(|_| "http://localhost:5050".to_string());
+    
+    // DB path
+    let db_path = std::env::var("MEMORY_BRAIN_DB")
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            format!("{}/.memory-brain/visual.db", home)
+        });
     
     if args.is_empty() {
         println!("🖼️ Visual Memory - Brain-inspired image storage");
         println!();
         println!("Usage:");
         println!("  memory-brain visual store <image_path> [--desc \"description\"] [--tags tag1,tag2]");
-        println!("  memory-brain visual recall <query>     # Search by text");
+        println!("  memory-brain visual store <image_path> --auto          # VLM auto-description");
+        println!("  memory-brain visual recall <query>     # Search images by text");
         println!("  memory-brain visual similar <image>    # Find similar images");
         println!("  memory-brain visual list               # List all visual memories");
+        println!("  memory-brain visual show <id>          # Show memory details");
         println!("  memory-brain visual stats              # Show statistics");
         println!();
-        println!("Server: {} (set CLIP_SERVER_URL to change)", server_url);
+        println!("CLIP Server: {} (set CLIP_SERVER_URL to change)", server_url);
+        println!("DB: {} (set MEMORY_BRAIN_DB to change)", db_path);
         println!();
         println!("Examples:");
-        println!("  memory-brain visual store photo.jpg --desc \"Coffee with Paul\" --tags cafe,seoul");
+        println!("  memory-brain visual store photo.jpg --auto                    # VLM describes it");
+        println!("  memory-brain visual store photo.jpg --desc \"Coffee\" --tags cafe,seoul");
         println!("  memory-brain visual recall \"coffee shop\"");
         println!("  memory-brain visual similar vacation.jpg");
         return Ok(());
@@ -1897,23 +1911,25 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
     let clip: Arc<dyn ClipProvider> = match ClipServerProvider::new(&server_url) {
         Ok(provider) => {
             if !quiet {
-                println!("🔗 Connected to CLIP server at {}", server_url);
+                eprintln!("🔗 CLIP server: {}", server_url);
             }
             Arc::new(provider)
         }
-        Err(e) => {
+        Err(_) => {
             if !quiet {
-                eprintln!("⚠️ CLIP server not available ({}), using mock embeddings", e);
-                eprintln!("   Start server: cd memory-brain && source .venv/bin/activate && python clip_server.py");
+                eprintln!("⚠️ CLIP server unavailable, using hash embeddings (install clip_server.py for real CLIP)");
             }
             Arc::new(MockClipProvider::new(512))
         }
     };
     
+    // Create async runtime for CoreDB operations
+    let rt = tokio::runtime::Runtime::new()?;
+    
     match args[0].as_str() {
         "store" | "add" => {
             if args.len() < 2 {
-                eprintln!("Usage: memory-brain visual store <image_path> [--desc \"...\"] [--tags ...]");
+                eprintln!("Usage: memory-brain visual store <image_path> [--desc \"...\"] [--tags ...] [--auto]");
                 return Ok(());
             }
             
@@ -1923,12 +1939,40 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
                 return Ok(());
             }
             
-            // Parse options
-            let desc = args.iter()
-                .position(|a| a == "--desc" || a == "-d")
-                .and_then(|i| args.get(i + 1))
-                .map(|s| s.as_str())
-                .unwrap_or("(no description)");
+            let auto_describe = args.iter().any(|a| a == "--auto" || a == "-a");
+            
+            // Parse description (or auto-generate)
+            let desc = if auto_describe {
+                let model = args.iter()
+                    .position(|a| a == "--model" || a == "-m")
+                    .and_then(|i| args.get(i + 1))
+                    .map(|s| s.as_str())
+                    .unwrap_or("llava:7b");
+                
+                if !quiet {
+                    eprintln!("🤖 Auto-describing with {} ...", model);
+                }
+                
+                let vlm = OllamaVlm::new(model);
+                let prompt = args.iter()
+                    .position(|a| a == "--prompt" || a == "-p")
+                    .and_then(|i| args.get(i + 1))
+                    .map(|s| s.as_str());
+                    
+                match vlm.describe_image(image_path, prompt) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        eprintln!("❌ VLM error: {}. Use --desc instead or start Ollama.", e);
+                        return Ok(());
+                    }
+                }
+            } else {
+                args.iter()
+                    .position(|a| a == "--desc" || a == "-d")
+                    .and_then(|i| args.get(i + 1))
+                    .cloned()
+                    .unwrap_or_else(|| "(no description)".to_string())
+            };
             
             let tags: Vec<String> = args.iter()
                 .position(|a| a == "--tags" || a == "-t")
@@ -1945,22 +1989,37 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
             // Generate CLIP embedding
             let embedding = clip.embed_image(image_path)?;
             
-            let memory = VisualMemory::new(
-                image_path.to_path_buf(),
-                embedding,
-                desc.to_string(),
-            )
-            .with_tags(tags.clone())
-            .with_emotion(emotion);
-            
-            if !quiet {
-                println!("✅ Stored visual memory: {}", image_path.display());
-                println!("   Description: {}", desc);
-                if !tags.is_empty() {
-                    println!("   Tags: {}", tags.join(", "));
+            // Store in CoreDB
+            rt.block_on(async {
+                let db = Arc::new(RwLock::new(
+                    open_visual_db(&db_path).await
+                ));
+                let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
+                    .expect("Failed to create VisualStorage");
+                
+                // Load cache for auto-linking
+                let _ = storage.load_cache().await;
+                
+                let memory = storage.store_image(
+                    image_path,
+                    &desc,
+                    None,
+                    tags.clone(),
+                    emotion,
+                ).await.expect("Failed to store visual memory");
+                
+                if !quiet {
+                    println!("✅ Stored visual memory: {}", image_path.display());
+                    println!("   Description: {}", desc);
+                    if !tags.is_empty() {
+                        println!("   Tags: {}", tags.join(", "));
+                    }
+                    if !memory.linked_visuals.is_empty() {
+                        println!("   Linked to {} similar images", memory.linked_visuals.len());
+                    }
+                    println!("   ID: {}", memory.id);
                 }
-                println!("   ID: {}", memory.id);
-            }
+            });
         }
         
         "recall" | "search" | "find" => {
@@ -1970,14 +2029,45 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
             }
             
             let query = args[1..].join(" ");
-            let query_embedding = clip.embed_text(&query)?;
+            let limit: usize = args.iter()
+                .position(|a| a == "--limit" || a == "-n")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(5);
             
-            if !quiet {
-                println!("🔍 Searching for: \"{}\"", query);
-                println!("   Embedding generated ({} dims)", query_embedding.len());
-                println!();
-                println!("   (Storage integration coming soon - embeddings working!)");
-            }
+            rt.block_on(async {
+                let db = Arc::new(RwLock::new(
+                    open_visual_db(&db_path).await
+                ));
+                let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
+                    .expect("Failed to create VisualStorage");
+                let loaded = storage.load_cache().await.unwrap_or(0);
+                
+                if loaded == 0 {
+                    println!("📷 No visual memories stored yet.");
+                    println!("   Use: memory-brain visual store <image> --auto");
+                    return;
+                }
+                
+                match storage.search_by_text(&query, limit).await {
+                    Ok(results) if results.is_empty() => {
+                        println!("🔍 No results for: \"{}\"", query);
+                    }
+                    Ok(results) => {
+                        println!("🔍 Results for \"{}\" ({} of {} memories):", query, results.len(), loaded);
+                        println!();
+                        for (i, (mem, score)) in results.iter().enumerate() {
+                            println!("  {}. [{:.1}%] {} ", i + 1, score * 100.0, mem.image_path.display());
+                            println!("     {}", truncate_str(&mem.description, 80));
+                            if !mem.tags.is_empty() {
+                                println!("     Tags: {}", mem.tags.join(", "));
+                            }
+                            println!();
+                        }
+                    }
+                    Err(e) => eprintln!("❌ Search error: {}", e),
+                }
+            });
         }
         
         "similar" => {
@@ -1992,26 +2082,136 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
                 return Ok(());
             }
             
-            let image_embedding = clip.embed_image(image_path)?;
+            let limit: usize = args.iter()
+                .position(|a| a == "--limit" || a == "-n")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(5);
             
-            if !quiet {
-                println!("🔍 Finding images similar to: {}", image_path.display());
-                println!("   Embedding generated ({} dims)", image_embedding.len());
-                println!();
-                println!("   (Storage integration coming soon - embeddings working!)");
-            }
+            rt.block_on(async {
+                let db = Arc::new(RwLock::new(
+                    open_visual_db(&db_path).await
+                ));
+                let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
+                    .expect("Failed to create VisualStorage");
+                let loaded = storage.load_cache().await.unwrap_or(0);
+                
+                if loaded == 0 {
+                    println!("📷 No visual memories stored yet.");
+                    return;
+                }
+                
+                match storage.search_by_image(image_path, limit).await {
+                    Ok(results) if results.is_empty() => {
+                        println!("🔍 No similar images found.");
+                    }
+                    Ok(results) => {
+                        println!("🔍 Images similar to {} ({} found):", image_path.display(), results.len());
+                        println!();
+                        for (i, (mem, score)) in results.iter().enumerate() {
+                            println!("  {}. [{:.1}%] {}", i + 1, score * 100.0, mem.image_path.display());
+                            println!("     {}", truncate_str(&mem.description, 80));
+                            println!();
+                        }
+                    }
+                    Err(e) => eprintln!("❌ Search error: {}", e),
+                }
+            });
         }
         
         "list" | "ls" => {
-            println!("📷 Visual Memories:");
-            println!("   (Storage not connected yet - coming soon!)");
+            let limit: usize = args.iter()
+                .position(|a| a == "--limit" || a == "-n")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(20);
+            
+            rt.block_on(async {
+                let db = Arc::new(RwLock::new(
+                    open_visual_db(&db_path).await
+                ));
+                let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
+                    .expect("Failed to create VisualStorage");
+                let loaded = storage.load_cache().await.unwrap_or(0);
+                
+                if loaded == 0 {
+                    println!("📷 No visual memories stored yet.");
+                    println!("   Use: memory-brain visual store <image> --auto");
+                    return;
+                }
+                
+                println!("📷 Visual Memories ({} total):", loaded);
+                println!();
+                
+                // Get all from cache via stats (we already loaded)
+                let stats = storage.stats().await.unwrap();
+                println!("  Embedding dim: {}", stats.embedding_dim);
+                println!("  Total: {} memories", stats.total_memories);
+            });
+        }
+        
+        "show" => {
+            if args.len() < 2 {
+                eprintln!("Usage: memory-brain visual show <id>");
+                return Ok(());
+            }
+            
+            let id_str = &args[1];
+            
+            rt.block_on(async {
+                let db = Arc::new(RwLock::new(
+                    open_visual_db(&db_path).await
+                ));
+                let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
+                    .expect("Failed to create VisualStorage");
+                let _ = storage.load_cache().await;
+                
+                if let Ok(id) = uuid::Uuid::parse_str(id_str) {
+                    match storage.get(id).await {
+                        Ok(Some(mem)) => {
+                            println!("🖼️  Visual Memory");
+                            println!("   ID: {}", mem.id);
+                            println!("   Path: {}", mem.image_path.display());
+                            println!("   Description: {}", mem.description);
+                            println!("   Tags: {}", if mem.tags.is_empty() { "(none)".to_string() } else { mem.tags.join(", ") });
+                            println!("   Emotion: {:.2}", mem.emotional_valence);
+                            println!("   Strength: {:.2}", mem.strength);
+                            println!("   Recalls: {}", mem.recall_count);
+                            println!("   Created: {}", mem.created_at.format("%Y-%m-%d %H:%M"));
+                            println!("   Last accessed: {}", mem.last_accessed.format("%Y-%m-%d %H:%M"));
+                            if !mem.linked_visuals.is_empty() {
+                                println!("   Linked visuals: {}", mem.linked_visuals.len());
+                            }
+                            if !mem.linked_memories.is_empty() {
+                                println!("   Linked memories: {}", mem.linked_memories.len());
+                            }
+                        }
+                        Ok(None) => println!("❌ Memory not found: {}", id_str),
+                        Err(e) => eprintln!("❌ Error: {}", e),
+                    }
+                } else {
+                    eprintln!("❌ Invalid UUID: {}", id_str);
+                }
+            });
         }
         
         "stats" => {
-            println!("📊 Visual Memory Statistics:");
-            println!("   Total memories: 0 (storage not connected)");
-            println!("   Embedding dim: {} (CLIP ViT-B/32)", clip.embedding_dim());
-            println!("   Server: {}", server_url);
+            rt.block_on(async {
+                let db = Arc::new(RwLock::new(
+                    open_visual_db(&db_path).await
+                ));
+                let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
+                    .expect("Failed to create VisualStorage");
+                let loaded = storage.load_cache().await.unwrap_or(0);
+                let stats = storage.stats().await.unwrap();
+                
+                println!("📊 Visual Memory Statistics:");
+                println!("   Total memories: {}", stats.total_memories);
+                println!("   Embedding dim: {} (CLIP ViT-B/32)", stats.embedding_dim);
+                println!("   CLIP server: {}", server_url);
+                println!("   VLM: {}", if check_vlm_available() { "✅ Ollama available" } else { "❌ Ollama not running" });
+                println!("   DB: {}", db_path);
+            });
         }
         
         _ => {
@@ -2021,6 +2221,35 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
     }
     
     Ok(())
+}
+
+async fn open_visual_db(db_path: &str) -> coredb::CoreDB {
+    use coredb::DatabaseConfig;
+    use std::path::PathBuf;
+    
+    let config = DatabaseConfig {
+        data_directory: PathBuf::from(db_path).join("data"),
+        commitlog_directory: PathBuf::from(db_path).join("commitlog"),
+        memtable_flush_threshold_mb: 16,
+        compaction_throughput_mb_per_sec: 16,
+        concurrent_reads: 32,
+        concurrent_writes: 32,
+    };
+    
+    coredb::CoreDB::new(config).await.expect("Failed to open CoreDB")
+}
+
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.min(s.len())])
+    }
+}
+
+fn check_vlm_available() -> bool {
+    use memory_brain::vlm::check_ollama_model;
+    check_ollama_model("llava").map(|_| true).unwrap_or(false)
 }
 
 // ============ VLM Commands ============

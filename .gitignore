@@ -5,3 +5,10 @@ __pycache__/
 visual_index/
 *.so
 *.dylib
+--format
+--output
+.DS_Store
+*.log
+memories*.json
+memory_map.html
+..bfg-report/
