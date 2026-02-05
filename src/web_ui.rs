@@ -66,7 +66,7 @@ pub async fn dashboard_page(State(state): State<Arc<AppState>>) -> Html<String> 
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+    <div class="card p-6">
         <h2 class="text-xl font-semibold mb-4"><i data-lucide="trending-up" class="w-5 h-5 inline-block align-middle"></i> Today's Activity</h2>
         <div class="space-y-3">
             <div class="flex items-center gap-3">
@@ -93,7 +93,7 @@ pub async fn dashboard_page(State(state): State<Arc<AppState>>) -> Html<String> 
         </div>
     </div>
     
-    <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+    <div class="card p-6">
         <h2 class="text-xl font-semibold mb-4"><i data-lucide="zap" class="w-5 h-5 inline-block align-middle"></i> Quick Actions</h2>
         <div class="flex flex-wrap gap-3">
             <a href="/store" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl transition">
@@ -123,16 +123,16 @@ pub async fn memories_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let mut memory_cards = String::new();
     for mem in memories {
         let tags_html: String = mem.tags.iter()
-            .map(|t| format!(r#"<span class="bg-cyan-900/50 text-cyan-400 px-2 py-1 rounded-lg text-sm">#{}</span>"#, t))
+            .map(|t| format!(r#"<span class="badge bg-indigo-500/10 text-indigo-400">#{}</span>"#, t))
             .collect::<Vec<_>>()
             .join(" ");
         
         memory_cards.push_str(&format!(
-            r##"<div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 hover:border-cyan-700/50 transition">
-                <p class="text-gray-200 mb-4">{}</p>
+            r##"<div class="card p-5">
+                <p class="text-zinc-300 text-sm leading-relaxed mb-3">{}</p>
                 <div class="flex justify-between items-center">
-                    <div class="flex gap-2">{}</div>
-                    <span class="text-gray-500 text-sm font-mono">{}</span>
+                    <div class="flex gap-1.5">{}</div>
+                    <span class="text-zinc-600 text-xs mono">{}</span>
                 </div>
             </div>"##, 
             html_escape(&mem.content),
@@ -143,14 +143,17 @@ pub async fn memories_page(State(state): State<Arc<AppState>>) -> Html<String> {
     
     let content = format!(
         r##"<div class="flex justify-between items-center mb-8">
-            <h1 class="text-4xl font-bold"><i data-lucide="brain" class="w-8 h-8 inline-block align-middle"></i> Memories</h1>
-            <a href="/store" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-xl transition">
-                <i data-lucide="plus" class="w-4 h-4 inline-block align-middle"></i> Store New
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight">Memories</h1>
+                <p class="text-zinc-500 text-sm mt-1">All stored memories</p>
+            </div>
+            <a href="/store" class="flex items-center gap-2 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Store New
             </a>
         </div>
-        <div class="space-y-4">{}</div>"##,
+        <div class="space-y-3">{}</div>"##,
         if memory_cards.is_empty() { 
-            r#"<div class="text-center text-gray-500 py-12">No memories yet. <a href="/store" class="text-cyan-400 hover:underline">Store your first memory!</a></div>"#.to_string()
+            r#"<div class="text-center text-zinc-600 py-16">No memories yet. <a href="/store" class="text-indigo-400 hover:text-indigo-300 transition">Store your first memory</a></div>"#.to_string()
         } else { 
             memory_cards 
         }
@@ -183,7 +186,7 @@ pub async fn search_results(
     Form(form): Form<SearchForm>,
 ) -> Html<String> {
     if form.query.is_empty() && form.tags.is_empty() {
-        return Html(r#"<div class="text-gray-500 text-center py-8">Enter a search query or select tags</div>"#.to_string());
+        return Html(r#"<div class="text-zinc-600 text-center py-10 text-sm">Enter a search query or select tags</div>"#.to_string());
     }
     
     let limit = form.limit.unwrap_or(20);
@@ -223,9 +226,9 @@ pub async fn search_results(
             String::new()
         };
         return Html(format!(
-            r##"<div class="text-center py-12">
-                <div class="text-4xl mb-4"><i data-lucide="search-x" class="w-12 h-12 mx-auto text-gray-400"></i></div>
-                <div class="text-gray-400">No memories found for "{}"{}</div>
+            r##"<div class="text-center py-14">
+                <i data-lucide="search-x" class="w-10 h-10 mx-auto text-zinc-700 mb-3"></i>
+                <div class="text-zinc-500 text-sm">No memories found for "{}"{}</div>
             </div>"##, 
             html_escape(&form.query),
             filter_info
@@ -233,22 +236,22 @@ pub async fn search_results(
     }
     
     let mut html = format!(
-        r#"<div class="text-gray-400 text-sm mb-4">Found {} memories</div>"#,
+        r#"<div class="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-4">Found {} memories</div>"#,
         filtered.len()
     );
     
     for mem in filtered {
         let tags_html: String = mem.tags.iter()
-            .map(|t| format!(r#"<span class="bg-cyan-900/50 text-cyan-400 px-2 py-1 rounded-lg text-sm">#{}</span>"#, t))
+            .map(|t| format!(r#"<span class="badge bg-indigo-500/10 text-indigo-400">#{}</span>"#, t))
             .collect::<Vec<_>>()
             .join(" ");
         
         html.push_str(&format!(
-            r##"<div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 hover:border-cyan-700/50 transition">
-                <p class="text-gray-200 mb-4">{}</p>
+            r##"<div class="card p-5">
+                <p class="text-zinc-300 text-sm leading-relaxed mb-3">{}</p>
                 <div class="flex justify-between items-center">
-                    <div class="flex gap-2">{}</div>
-                    <span class="text-gray-500 text-sm font-mono">{}</span>
+                    <div class="flex gap-1.5">{}</div>
+                    <span class="text-zinc-600 text-xs mono">{}</span>
                 </div>
             </div>"##, 
             html_escape(&mem.content),
@@ -277,7 +280,7 @@ pub async fn store_submit(
     Form(form): Form<StoreForm>,
 ) -> Html<String> {
     if form.content.is_empty() {
-        return Html(r#"<div class="text-red-400 p-4 rounded-xl bg-red-900/30 border border-red-700"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Content is required</div>"#.to_string());
+        return Html(r#"<div class="text-red-400 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-sm"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Content is required</div>"#.to_string());
     }
     
     let mut brain = state.brain.write().await;
@@ -298,7 +301,7 @@ pub async fn store_submit(
             let _ = state.hnsw.add(item.id, embedding);
             crate::audit::log_store(&form.content, &item.tags);
             Html(format!(
-                r##"<div class="text-green-400 p-4 rounded-xl bg-green-900/30 border border-green-700">
+                r##"<div class="text-emerald-400 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm">
                     <i data-lucide="check-circle" class="w-4 h-4 inline-block align-middle"></i> Memory stored! ID: <span class="font-mono">{}</span>
                 </div>
                 <script>setTimeout(() => document.querySelector('form').reset(), 100);</script>"##,
@@ -307,7 +310,7 @@ pub async fn store_submit(
         }
         Err(e) => {
             Html(format!(
-                r##"<div class="text-red-400 p-4 rounded-xl bg-red-900/30 border border-red-700"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Error: {}</div>"##,
+                r##"<div class="text-red-400 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-sm"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Error: {}</div>"##,
                 e
             ))
         }
@@ -323,7 +326,7 @@ pub async fn visual_page() -> Html<String> {
     let clip_status = match ureq::get("http://localhost:5050/health").call() {
         Ok(resp) => {
             if resp.status() == 200 {
-                "<span class=\"w-2 h-2 rounded-full bg-green-500 inline-block\"></span> Connected"
+                "<span class=\"w-2 h-2 rounded-full bg-emerald-500 inline-block mr-1\"></span> Connected"
             } else {
                 "<span class=\"w-2 h-2 rounded-full bg-yellow-500 inline-block\"></span> Error"
             }
@@ -346,7 +349,7 @@ pub async fn visual_page() -> Html<String> {
             let place = photo.get("place").and_then(|p| p.as_str()).unwrap_or("");
             
             gallery.push_str(&format!(
-                r##"<div class="bg-gray-800/50 rounded-xl p-2 border border-gray-700">
+                r##"<div class="card p-2">
                     <div class="aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
                         <img src="/api/visual/thumb?path={}" alt="{}" class="w-full h-full object-cover" onerror="this.style.display='none'" />
                     </div>
@@ -356,17 +359,17 @@ pub async fn visual_page() -> Html<String> {
                 urlencoding::encode(path),
                 html_escape(filename),
                 html_escape(filename),
-                if !place.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate"><i data-lucide="map-pin" class="w-3 h-3 inline-block align-middle"></i> {}</div>"#, html_escape(place)) } else { String::new() }
+                if !place.is_empty() { format!(r#"<div class="text-xs text-zinc-600 truncate flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i>{}</div>"#, html_escape(place)) } else { String::new() }
             ));
         }
         
         if gallery.is_empty() {
-            (count.to_string(), r#"<div class="col-span-4 text-center text-gray-500 py-12">No photos with thumbnails available</div>"#.to_string())
+            (count.to_string(), r#"<div class="col-span-4 text-center text-zinc-600 py-14 text-sm">No photos with thumbnails available</div>"#.to_string())
         } else {
             (count.to_string(), gallery)
         }
     } else {
-        ("0".to_string(), r#"<div class="col-span-4 text-center text-gray-500 py-12">
+        ("0".to_string(), r#"<div class="col-span-4 text-center text-zinc-600 py-14">
             <div class="text-4xl mb-4"><i data-lucide="image-off" class="w-12 h-12 mx-auto text-gray-400"></i></div>
             <div>No photos indexed yet</div>
             <div class="text-sm mt-2">Run: <code class="bg-gray-700 px-2 py-1 rounded">python photos_sync.py sync --limit 100</code></div>
@@ -398,7 +401,7 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
         let content = std::fs::read_to_string(index_path).unwrap_or_default();
         serde_json::from_str(&content).unwrap_or_default()
     } else {
-        return Html(r#"<div class="text-yellow-400 text-center py-8">No photos indexed yet. Run: <code class="bg-gray-700 px-2 py-1 rounded">python photos_sync.py sync --limit 100</code></div>"#.to_string());
+        return Html(r#"<div class="text-amber-400/80 text-center py-10 text-sm">No photos indexed yet. Run: <code class="bg-gray-700 px-2 py-1 rounded">python photos_sync.py sync --limit 100</code></div>"#.to_string());
     };
     
     // Get query embedding from CLIP server
@@ -414,9 +417,9 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
         }
         Err(e) => {
             return Html(format!(
-                r##"<div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4">
-                    <div class="text-yellow-400"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
-                    <div class="text-gray-400 text-sm mt-2">Start it with: <code class="bg-gray-700 px-2 py-1 rounded">python clip_server.py 5050</code></div>
+                r##"<div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+                    <div class="text-amber-400 text-sm"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
+                    <div class="text-zinc-500 text-xs mt-2">Start it with: <code class="bg-gray-700 px-2 py-1 rounded">python clip_server.py 5050</code></div>
                 </div>"##
             ));
         }
@@ -459,12 +462,12 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
         let path = photo.get("path").and_then(|p| p.as_str()).unwrap_or("");
         
         html.push_str(&format!(
-            r##"<div class="bg-gray-800/50 rounded-xl p-3 border border-gray-700 hover:border-pink-500/50 transition">
+            r##"<div class="card p-3">
                 <div class="aspect-square bg-gray-700 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
                     <img src="/api/visual/thumb?path={}" alt="{}" class="w-full h-full object-cover" onerror="this.style.display='none'" />
                 </div>
                 <div class="text-sm text-gray-300 truncate">{}</div>
-                <div class="text-xs text-pink-400">{:.1}% match</div>
+                <div class="text-xs text-indigo-400 mono">{:.1}%</div>
                 {}
                 {}
             </div>"##,
@@ -472,8 +475,8 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
             html_escape(filename),
             html_escape(filename),
             sim * 100.0,
-            if !place.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate"><i data-lucide="map-pin" class="w-3 h-3 inline-block align-middle"></i> {}</div>"#, html_escape(place)) } else { String::new() },
-            if !persons.is_empty() { format!(r#"<div class="text-xs text-gray-500 truncate"><i data-lucide="user" class="w-3 h-3 inline-block align-middle"></i> {}</div>"#, persons.join(", ")) } else { String::new() }
+            if !place.is_empty() { format!(r#"<div class="text-xs text-zinc-600 truncate flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i>{}</div>"#, html_escape(place)) } else { String::new() },
+            if !persons.is_empty() { format!(r#"<div class="text-xs text-zinc-600 truncate flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{}</div>"#, persons.join(", ")) } else { String::new() }
         ));
     }
     
@@ -523,17 +526,17 @@ pub async fn visual_store(Form(form): Form<VisualStoreForm>) -> Html<String> {
             if result.get("embedding").is_some() {
                 let tags: Vec<&str> = form.tags.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                 Html(format!(
-                    r##"<div class="bg-green-900/30 border border-green-700 rounded-xl p-4">
+                    r##"<div class="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
                         <div class="text-green-400"><i data-lucide="check-circle" class="w-4 h-4 inline-block align-middle"></i> Visual memory stored!</div>
-                        <div class="text-gray-400 text-sm mt-2">Path: {}</div>
-                        <div class="text-gray-400 text-sm">Description: {}</div>
+                        <div class="text-zinc-500 text-xs mt-2">Path: {}</div>
+                        <div class="text-zinc-500 text-xs">Description: {}</div>
                         {}
-                        <div class="text-gray-500 text-sm mt-2">(Visual storage persistence coming soon!)</div>
+                        <div class="text-zinc-600 text-xs mt-2">(Visual storage persistence coming soon!)</div>
                     </div>"##,
                     html_escape(&form.path),
                     html_escape(&form.description),
                     if tags.is_empty() { String::new() } else {
-                        format!(r#"<div class="text-gray-400 text-sm">Tags: {}</div>"#, tags.join(", "))
+                        format!(r#"<div class="text-zinc-500 text-xs">Tags: {}</div>"#, tags.join(", "))
                     }
                 ))
             } else {
@@ -542,9 +545,9 @@ pub async fn visual_store(Form(form): Form<VisualStoreForm>) -> Html<String> {
         }
         Err(e) => {
             Html(format!(
-                r##"<div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4">
-                    <div class="text-yellow-400"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
-                    <div class="text-gray-400 text-sm mt-2">Error: {}</div>
+                r##"<div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+                    <div class="text-amber-400 text-sm"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
+                    <div class="text-zinc-500 text-xs mt-2">Error: {}</div>
                 </div>"##,
                 e
             ))
@@ -607,39 +610,39 @@ pub async fn mindmap_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let memory_count = brain.semantic.search("", 10000).map(|v| v.len()).unwrap_or(0);
     
     let content = format!(r##"
-<h1 class="text-4xl font-bold mb-4"><i data-lucide="network" class="w-8 h-8 inline-block align-middle"></i> Memory Mind Map</h1>
-<p class="text-gray-400 mb-6">기억들의 연결을 시각적으로 탐색하세요. 노드를 드래그하거나 줌/패닝할 수 있습니다.</p>
+<div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">Mind Map</h1>
+<p class="text-zinc-500 text-sm mt-1">기억들의 연결을 시각적으로 탐색하세요. 노드를 드래그하거나 줌/패닝할 수 있습니다.</p>
 
 <div class="flex gap-4 mb-6">
-    <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700">
-        <span class="text-gray-400 text-sm">Threshold:</span>
-        <select id="threshold" onchange="loadMindMap()" class="bg-gray-700 text-white rounded px-2 py-1 ml-2">
+    <div class="card px-3 py-2">
+        <span class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Threshold</span>
+        <select id="threshold" onchange="loadMindMap()" class="bg-[#19191c] text-zinc-300 rounded-lg px-2 py-1 ml-2 text-sm border border-[#2a2a2e]">
             <option value="0.3" selected>0.3 (많은 연결)</option>
             <option value="0.4">0.4 (보통)</option>
             <option value="0.5">0.5 (강한 연결만)</option>
             <option value="0.6">0.6 (매우 강한 연결)</option>
         </select>
     </div>
-    <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700">
-        <span class="text-gray-400 text-sm">Limit:</span>
-        <select id="limit" onchange="loadMindMap()" class="bg-gray-700 text-white rounded px-2 py-1 ml-2">
+    <div class="card px-3 py-2">
+        <span class="text-zinc-500 text-xs font-medium uppercase tracking-wider">Limit</span>
+        <select id="limit" onchange="loadMindMap()" class="bg-[#19191c] text-zinc-300 rounded-lg px-2 py-1 ml-2 text-sm border border-[#2a2a2e]">
             <option value="50">50</option>
             <option value="100" selected>100</option>
             <option value="200">200</option>
             <option value="500">500</option>
         </select>
     </div>
-    <div class="bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700 text-cyan-400">
+    <div class="card px-3 py-2 text-indigo-400 text-sm">
         <i data-lucide="brain" class="w-4 h-4 inline-block align-middle"></i> {memory_count} memories
     </div>
 </div>
 
-<div id="mindmap-container" class="bg-gray-900/80 rounded-2xl border border-gray-700 relative" style="height: 70vh; overflow: hidden;">
+<div id="mindmap-container" class="card relative" style="height: 70vh; overflow: hidden;">
     <div id="mindmap-loading" class="absolute inset-0 flex items-center justify-center text-gray-400">
         로딩 중...
     </div>
-    <div id="tooltip" class="absolute hidden bg-black/90 text-white p-3 rounded-lg text-sm max-w-xs border border-gray-600 pointer-events-none z-10"></div>
-    <div id="legend" class="absolute top-4 right-4 bg-black/50 p-3 rounded-lg text-xs text-white"></div>
+    <div id="tooltip" class="absolute hidden bg-[#111113] text-zinc-200 p-3 rounded-lg text-xs max-w-xs border border-[#2a2a2e] pointer-events-none z-10 shadow-xl"></div>
+    <div id="legend" class="absolute top-4 right-4 bg-[#111113]/90 p-3 rounded-lg text-xs text-zinc-400 border border-[#2a2a2e]"></div>
 </div>
 
 <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -673,7 +676,7 @@ function renderMindMap(data) {{
     
     if (data.nodes.length === 0) {{
         loading.style.display = 'flex';
-        loading.textContent = '기억이 없습니다. Store에서 추가하세요.';
+        loading.textContent = '기억이 없습니다.';
         return;
     }}
     
@@ -698,7 +701,7 @@ function renderMindMap(data) {{
         .selectAll('line')
         .data(data.links)
         .join('line')
-        .attr('stroke', 'rgba(255,255,255,0.15)')
+        .attr('stroke', 'rgba(255,255,255,0.08)')
         .attr('stroke-width', d => d.weight * 3);
     
     const node = g.append('g')
@@ -721,7 +724,7 @@ function renderMindMap(data) {{
         .attr('dx', d => d.size + 4)
         .attr('dy', 4)
         .text(d => d.label)
-        .attr('fill', '#ccc')
+        .attr('fill', '#a1a1aa')
         .attr('font-size', '10px')
         .style('pointer-events', 'none');
     
@@ -796,11 +799,11 @@ pub async fn mindmap_data(
 /// Timeline page - memories over time
 pub async fn timeline_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let content = r##"
-<h1 class="text-4xl font-bold mb-4"><i data-lucide="calendar" class="w-8 h-8 inline-block align-middle"></i> Memory Timeline</h1>
-<p class="text-gray-400 mb-6">시간 순으로 기억의 흐름을 확인하세요.</p>
+<div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">Timeline</h1>
+<p class="text-zinc-500 text-sm mt-1">시간 순으로 기억의 흐름을 확인하세요.</p>
 
 <div id="timeline-container" class="space-y-1" hx-get="/timeline/data" hx-trigger="load" hx-swap="innerHTML">
-    <div class="text-gray-400 text-center py-12">로딩 중...</div>
+    <div class="text-zinc-600 text-center py-14 text-sm">로딩 중...</div>
 </div>
 "##;
 
@@ -813,7 +816,7 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
     let memories = brain.semantic.search("", 10000).unwrap_or_default();
     
     if memories.is_empty() {
-        return Html(r#"<div class="text-gray-500 text-center py-12">기억이 없습니다.</div>"#.to_string());
+        return Html(r#"<div class="text-zinc-600 text-center py-14 text-sm">기억이 없습니다.</div>"#.to_string());
     }
     
     // Group by date
@@ -843,12 +846,12 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
         html.push_str(&format!(
             r##"<div class="mb-8">
                 <div class="flex items-center gap-3 mb-4">
-                    <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
-                    <h2 class="text-xl font-semibold text-cyan-400">{}</h2>
-                    <span class="text-gray-500 text-sm">{}</span>
-                    <span class="text-gray-600 text-sm">({} memories)</span>
+                    <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                    <h2 class="text-base font-semibold text-zinc-200">{}</h2>
+                    <span class="text-zinc-500 text-sm">{}</span>
+                    <span class="text-zinc-600 text-xs">({} memories)</span>
                 </div>
-                <div class="ml-6 border-l-2 border-gray-700 pl-6 space-y-3">"##,
+                <div class="ml-6 border-l border-[#2a2a2e] pl-6 space-y-3">"##,
             date, weekday, mems.len()
         ));
         
@@ -862,14 +865,14 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
             };
             
             html.push_str(&format!(
-                r##"<div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700 hover:border-{color}-500/50 transition">
+                r##"<div class="card p-4">
                     <div class="flex items-start justify-between">
                         <div class="flex-1">
-                            <div class="text-gray-200">{content}</div>
+                            <div class="text-zinc-300 text-sm leading-relaxed">{content}</div>
                             <div class="flex items-center gap-3 mt-2 text-xs">
-                                <span class="bg-{color}-900/50 text-{color}-400 px-2 py-0.5 rounded">{type_name}</span>
-                                <span class="text-gray-500">{time}</span>
-                                <span class="text-gray-500"><i data-lucide="gauge" class="w-3 h-3 inline-block align-middle"></i> {strength}%</span>
+                                <span class="badge bg-{color}-500/10 text-{color}-400">{type_name}</span>
+                                <span class="text-zinc-600 mono">{time}</span>
+                                <span class="text-zinc-600 mono">{strength}%</span>
                                 {tags}
                             </div>
                         </div>
@@ -896,69 +899,71 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
 /// CoreDB Browser page
 pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
     let content = r##"
-<h1 class="text-4xl font-bold mb-4"><i data-lucide="database" class="w-8 h-8 inline-block align-middle"></i> CoreDB Browser</h1>
-<p class="text-gray-400 mb-6">CoreDB에 저장된 데이터를 직접 조회하세요. CQL 쿼리를 실행할 수 있습니다.</p>
+<div class="mb-6">
+    <h1 class="text-2xl font-semibold tracking-tight">CoreDB Browser</h1>
+    <p class="text-zinc-500 text-sm mt-1">Execute CQL queries against the memory store</p>
+</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Query Panel -->
     <div class="lg:col-span-2">
-        <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-            <h2 class="text-xl font-semibold mb-4 text-emerald-400"><i data-lucide="terminal" class="w-5 h-5 inline-block align-middle"></i> CQL Query</h2>
+        <div class="card p-6">
+            <h2 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2"><i data-lucide="terminal" class="w-5 h-5 inline-block align-middle"></i> CQL Query</h2>
             <form hx-post="/coredb/query" hx-target="#results" hx-swap="innerHTML" hx-indicator="#loading">
                 <textarea name="query" rows="3" 
-                    class="w-full bg-gray-900 text-emerald-300 font-mono rounded-lg p-4 border border-gray-600 focus:border-emerald-500 focus:outline-none resize-y"
+                    class="w-full bg-[#19191c] text-emerald-300 mono rounded-lg p-4 border border-[#2a2a2e] focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20 resize-y text-sm"
                     placeholder="SELECT * FROM memory_brain.semantic LIMIT 10">SELECT * FROM memory_brain.semantic LIMIT 20</textarea>
                 <div class="flex gap-3 mt-3">
-                    <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition font-semibold">
+                    <button type="submit" class="px-5 py-2 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 rounded-lg transition text-sm font-medium flex items-center gap-2">
                         <i data-lucide="play" class="w-4 h-4 inline-block align-middle"></i> Execute
                     </button>
-                    <span id="loading" class="htmx-indicator text-gray-400 py-2">실행 중...</span>
+                    <span id="loading" class="htmx-indicator text-zinc-500 py-2 text-sm">실행 중...</span>
                 </div>
             </form>
             
-            <div class="mt-3 text-xs text-gray-500">
+            <div class="mt-3 text-xs text-zinc-600 flex items-center gap-2 flex-wrap">
                 Quick queries:
-                <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-emerald-500 hover:underline ml-2">Semantic (default)</button>
-                <button onclick="setQuery('SELECT * FROM memory_brain.episodic LIMIT 20')" class="text-blue-500 hover:underline ml-2">Episodic</button>
-                <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-cyan-500 hover:underline ml-2">Semantic</button>
-                <button onclick="setQuery('SELECT * FROM memory_brain.procedural LIMIT 20')" class="text-purple-500 hover:underline ml-2">Procedural</button>
-                <button onclick="setQuery('SELECT * FROM visual_brain.visual_memories LIMIT 20')" class="text-pink-500 hover:underline ml-2">Visual</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-indigo-400 hover:text-indigo-300 transition">Semantic (default)</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.episodic LIMIT 20')" class="text-blue-400 hover:text-blue-300 transition">Episodic</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.semantic LIMIT 20')" class="text-cyan-400 hover:text-cyan-300 transition">Semantic</button>
+                <button onclick="setQuery('SELECT * FROM memory_brain.procedural LIMIT 20')" class="text-purple-400 hover:text-purple-300 transition">Procedural</button>
+                <button onclick="setQuery('SELECT * FROM visual_brain.visual_memories LIMIT 20')" class="text-pink-400 hover:text-pink-300 transition">Visual</button>
             </div>
         </div>
         
         <!-- Results -->
         <div id="results" class="mt-6">
-            <div class="text-gray-500 text-center py-8">쿼리를 실행하면 결과가 여기에 표시됩니다.</div>
+            <div class="text-zinc-600 text-center py-10 text-sm">쿼리를 실행하면 결과가 여기에 표시됩니다.</div>
         </div>
     </div>
     
     <!-- Info Panel -->
     <div class="space-y-4">
-        <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-            <h3 class="text-lg font-semibold text-emerald-400 mb-3"><i data-lucide="table-2" class="w-5 h-5 inline-block align-middle"></i> Tables</h3>
+        <div class="card p-6">
+            <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2"><i data-lucide="table-2" class="w-5 h-5 inline-block align-middle"></i> Tables</h3>
             <div class="space-y-2 text-sm">
                 <div class="flex justify-between text-gray-300">
                     <span>memory_brain.episodic</span>
-                    <span class="text-gray-500">일화 기억</span>
+                    <span class="text-zinc-600">일화 기억</span>
                 </div>
                 <div class="flex justify-between text-gray-300">
                     <span>memory_brain.semantic</span>
-                    <span class="text-gray-500">의미 기억</span>
+                    <span class="text-zinc-600">의미 기억</span>
                 </div>
                 <div class="flex justify-between text-gray-300">
                     <span>memory_brain.procedural</span>
-                    <span class="text-gray-500">절차 기억</span>
+                    <span class="text-zinc-600">절차 기억</span>
                 </div>
                 <div class="flex justify-between text-gray-300">
                     <span>visual_brain.visual_memories</span>
-                    <span class="text-gray-500">시각 기억</span>
+                    <span class="text-zinc-600">시각 기억</span>
                 </div>
             </div>
         </div>
         
-        <div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
-            <h3 class="text-lg font-semibold text-emerald-400 mb-3"><i data-lucide="book-open" class="w-5 h-5 inline-block align-middle"></i> CQL Guide</h3>
-            <div class="text-sm text-gray-400 space-y-2 font-mono">
+        <div class="card p-6">
+            <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2"><i data-lucide="book-open" class="w-5 h-5 inline-block align-middle"></i> CQL Guide</h3>
+            <div class="text-xs text-zinc-500 space-y-1.5 mono">
                 <p>SELECT * FROM ks.table</p>
                 <p>SELECT * FROM ks.table LIMIT n</p>
                 <p>SELECT * FROM ks.table WHERE id = 'xxx'</p>
@@ -1000,10 +1005,10 @@ pub async fn coredb_query(
     match brain.storage_execute_cql(query) {
         Ok(result) => {
             Html(format!(
-                r##"<div class="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+                r##"<div class="card p-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-emerald-400"><i data-lucide="table" class="w-5 h-5 inline-block align-middle"></i> Results</h3>
-                        <span class="text-xs text-gray-500 font-mono">{}</span>
+                        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><i data-lucide="table" class="w-5 h-5 inline-block align-middle"></i> Results</h3>
+                        <span class="text-xs text-zinc-600 mono">{}</span>
                     </div>
                     <div class="overflow-x-auto">
                         {}
@@ -1015,10 +1020,10 @@ pub async fn coredb_query(
         }
         Err(e) => {
             Html(format!(
-                r##"<div class="bg-red-900/30 rounded-xl p-4 border border-red-700">
-                    <div class="text-red-400 font-semibold"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Error</div>
-                    <div class="text-red-300 text-sm mt-2 font-mono">{}</div>
-                    <div class="text-gray-500 text-xs mt-2">Query: {}</div>
+                r##"<div class="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
+                    <div class="text-red-400 text-sm font-medium flex items-center gap-2"><i data-lucide="x-circle" class="w-4 h-4 inline-block align-middle"></i> Error</div>
+                    <div class="text-red-300/80 text-xs mt-2 mono">{}</div>
+                    <div class="text-zinc-600 text-xs mt-2 mono">Query: {}</div>
                 </div>"##,
                 html_escape(&e),
                 html_escape(query),
