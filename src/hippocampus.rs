@@ -6,7 +6,7 @@
 //! 3. **Auto-importance** - Automatic strength scoring based on novelty + emotion
 
 use crate::{Brain, MemoryItem, cosine_similarity};
-use chrono::{DateTime, Utc, Duration};
+use chrono::{Utc, Duration};
 use std::collections::HashMap;
 
 /// Hippocampus - manages memory formation and consolidation
@@ -262,7 +262,7 @@ impl<'a> Hippocampus<'a> {
         }
     }
 
-    fn calculate_novelty(&self, content: &str, tags: &[String]) -> f32 {
+    fn calculate_novelty(&self, content: &str, _tags: &[String]) -> f32 {
         // Search for similar existing memories
         let similar = self.brain.semantic.search(content, 5).unwrap_or_default();
         

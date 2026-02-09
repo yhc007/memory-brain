@@ -75,7 +75,7 @@ impl HnswIndex {
         let mut hnsw = self.hnsw.write().unwrap();
         let mut id_map = self.id_map.write().unwrap();
         let mut uuid_to_idx = self.uuid_to_idx.write().unwrap();
-        let next_idx = self.next_idx.write().unwrap();
+        let _next_idx = self.next_idx.write().unwrap();
 
         // Check if already exists
         if uuid_to_idx.contains_key(&id) {

@@ -6,7 +6,7 @@
 //! - Simple RLE for repeated patterns
 //! - Delta encoding for time series
 
-use std::io::{Read, Write};
+// use std::io::{Read, Write}; // Reserved for future compression I/O
 
 /// Quantized embedding (i8 instead of f32)
 #[derive(Debug, Clone)]

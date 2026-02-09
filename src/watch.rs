@@ -36,6 +36,7 @@ impl Default for WatchConfig {
 
 /// Memory snapshot for comparison
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct MemorySnapshot {
     timestamp: Instant,
     semantic_count: usize,
@@ -194,7 +195,7 @@ impl<'a> MemoryWatcher<'a> {
                 println!("║  📈 Changes Since Last Refresh                               ║");
                 
                 if diff.semantic_delta != 0 {
-                    let sign = if diff.semantic_delta > 0 { "+" } else { "" };
+                    let _sign = if diff.semantic_delta > 0 { "+" } else { "" };
                     println!("║  ├─ Semantic:  {:>+6}                                       ║", diff.semantic_delta);
                 }
                 if diff.episodic_delta != 0 {

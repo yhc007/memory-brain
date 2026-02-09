@@ -181,6 +181,7 @@ pub async fn search_page() -> Html<String> {
 
 /// Search results (HTMX partial)
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct SearchForm {
     query: String,
     #[serde(default)]
@@ -427,7 +428,7 @@ pub async fn visual_search(Form(form): Form<VisualSearchForm>) -> Html<String> {
                 .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
                 .unwrap_or_default()
         }
-        Err(e) => {
+        Err(_e) => {
             return Html(format!(
                 r##"<div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
                     <div class="text-amber-400 text-sm"><i data-lucide="alert-triangle" class="w-4 h-4 inline-block align-middle"></i> CLIP server not available</div>
@@ -809,7 +810,7 @@ pub async fn mindmap_data(
 }
 
 /// Timeline page - memories over time
-pub async fn timeline_page(State(state): State<Arc<AppState>>) -> Html<String> {
+pub async fn timeline_page(State(_state): State<Arc<AppState>>) -> Html<String> {
     let content = r##"
 <div class="mb-6"><h1 class="text-2xl font-semibold tracking-tight">Timeline</h1>
 <p class="text-zinc-500 text-sm mt-1">시간 순으로 기억의 흐름을 확인하세요.</p>
@@ -909,7 +910,7 @@ pub async fn timeline_data(State(state): State<Arc<AppState>>) -> Html<String> {
 }
 
 /// CoreDB Browser page
-pub async fn coredb_page(State(state): State<Arc<AppState>>) -> Html<String> {
+pub async fn coredb_page(State(_state): State<Arc<AppState>>) -> Html<String> {
     let content = r##"
 <div class="mb-6">
     <h1 class="text-2xl font-semibold tracking-tight">CoreDB Browser</h1>

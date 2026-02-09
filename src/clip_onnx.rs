@@ -18,6 +18,7 @@ pub struct ClipOnnx {
     image_session: Session,
     #[cfg(feature = "clip")]
     text_session: Session,
+    #[allow(dead_code)]
     embedding_dim: usize,
 }
 

@@ -374,8 +374,8 @@ fn cmd_batch(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box<
         return Ok(());
     }
 
-    // Generate embeddings in batch
-    let texts: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
+    // Generate embeddings in batch (reserved for batch embedding optimization)
+    let _texts: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
     
     // Store each memory
     for content in &lines {
@@ -1101,7 +1101,7 @@ fn cmd_map(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn st
     
     let map = MindMap::from_brain(brain, limit, threshold);
     
-    let content = match format {
+    let _content = match format {
         "dot" => {
             let out = if output == "memory_map.html" { "memory_map.dot" } else { output };
             let content = map.to_dot();
@@ -1867,7 +1867,7 @@ fn cmd_sam(args: &[String], db_path: &str, quiet: bool) -> Result<(), Box<dyn st
 
 fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     use memory_brain::clip_onnx::{MockClipProvider, ClipServerProvider};
-    use memory_brain::visual::{ClipProvider, VisualMemory, VisualContext, ImageSource, cosine_similarity};
+    use memory_brain::visual::ClipProvider;
     use memory_brain::visual_storage::VisualStorage;
     use memory_brain::vlm::{OllamaVlm, VlmProvider};
     use std::sync::Arc;
@@ -1986,8 +1986,8 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0.0);
             
-            // Generate CLIP embedding
-            let embedding = clip.embed_image(image_path)?;
+            // Generate CLIP embedding (currently handled by VisualStorage)
+            let _embedding = clip.embed_image(image_path)?;
             
             // Store in CoreDB
             rt.block_on(async {
@@ -2120,7 +2120,7 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
         }
         
         "list" | "ls" => {
-            let limit: usize = args.iter()
+            let _limit: usize = args.iter()
                 .position(|a| a == "--limit" || a == "-n")
                 .and_then(|i| args.get(i + 1))
                 .and_then(|s| s.parse().ok())
@@ -2202,7 +2202,7 @@ fn cmd_visual(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Er
                 ));
                 let storage = VisualStorage::new(db, clip.clone(), "visual_brain").await
                     .expect("Failed to create VisualStorage");
-                let loaded = storage.load_cache().await.unwrap_or(0);
+                let _loaded = storage.load_cache().await.unwrap_or(0);
                 let stats = storage.stats().await.unwrap();
                 
                 println!("📊 Visual Memory Statistics:");

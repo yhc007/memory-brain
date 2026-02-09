@@ -109,7 +109,7 @@ unsafe fn cosine_similarity_neon(a: &[f32], b: &[f32]) -> f32 {
 unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     let len = a.len();
     let chunks = len / 4;
-    let remainder = len % 4;
+    let _remainder = len % 4;
     
     let mut sum = vdupq_n_f32(0.0);
     
@@ -240,7 +240,9 @@ unsafe fn l2_norm_avx(v: &[f32]) -> f32 {
 }
 
 // ============ Scalar Fallback ============
+// These are kept for non-SIMD platforms and testing
 
+#[allow(dead_code)]
 #[inline]
 fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
     let dot = dot_product_scalar(a, b);
@@ -254,11 +256,13 @@ fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
+#[allow(dead_code)]
 #[inline]
 fn dot_product_scalar(a: &[f32], b: &[f32]) -> f32 {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
 
+#[allow(dead_code)]
 #[inline]
 fn l2_norm_scalar(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum::<f32>().sqrt()

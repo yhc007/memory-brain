@@ -33,6 +33,7 @@ pub struct App {
     /// Weekly stats
     weekly_stats: Vec<(String, usize, usize, usize)>,
     /// Scroll offset for memory list
+    #[allow(dead_code)]
     scroll_offset: usize,
 }
 
@@ -157,7 +158,7 @@ fn ui(frame: &mut Frame, app: &App) {
     frame.render_widget(header, chunks[0]);
     
     // Tabs
-    let tabs: Vec<Line> = app.tabs.iter()
+    let _tabs: Vec<Line> = app.tabs.iter()
         .enumerate()
         .map(|(i, t)| {
             if i == app.tab {

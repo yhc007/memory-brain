@@ -206,7 +206,7 @@ impl SamBrain {
     }
 
     /// Get memories by type
-    pub fn recall_by_type(&self, memory_type: SamMemoryType, limit: usize) -> Result<Vec<MemoryItem>, Box<dyn std::error::Error>> {
+    pub fn recall_by_type(&self, memory_type: SamMemoryType, _limit: usize) -> Result<Vec<MemoryItem>, Box<dyn std::error::Error>> {
         let tag = format!("sam:{:?}", memory_type).to_lowercase();
         self.brain.semantic.get_by_tag(&tag)
     }
