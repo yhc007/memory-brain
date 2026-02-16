@@ -106,6 +106,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_map(&brain, &args[2..], quiet)?;
         }
 
+        Some("constellation") | Some("stars") | Some("space") => {
+            cmd_constellation(&brain, &args[2..], quiet)?;
+        }
+
         Some("predict") | Some("next") => {
             cmd_predict(&brain, quiet)?;
         }
@@ -1051,6 +1055,7 @@ fn cmd_map(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn st
     let mut limit = 100;
     let mut threshold = 0.3;
     let mut open_browser = false;
+    let mut query: Option<String> = None;
     
     let mut i = 0;
     while i < args.len() {
@@ -1087,19 +1092,35 @@ fn cmd_map(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn st
                     continue;
                 }
             }
+            "--query" | "-q" => {
+                if i + 1 < args.len() {
+                    query = Some(args[i + 1].clone());
+                    i += 2;
+                    continue;
+                }
+            }
             "--open" => {
                 open_browser = true;
             }
-            _ => {}
+            _ => {
+                // Treat first non-flag argument as query
+                if !args[i].starts_with('-') && query.is_none() {
+                    query = Some(args[i].clone());
+                }
+            }
         }
         i += 1;
     }
     
     if !quiet {
-        println!("🗺️  Generating mind map...");
+        if let Some(ref q) = query {
+            println!("🗺️  Generating mind map for \"{}\"...", q);
+        } else {
+            println!("🗺️  Generating mind map...");
+        }
     }
     
-    let map = MindMap::from_brain(brain, limit, threshold);
+    let map = MindMap::from_brain_filtered(brain, query.as_deref(), limit, threshold);
     
     let _content = match format {
         "dot" => {
@@ -1140,6 +1161,64 @@ fn cmd_map(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn st
             content
         }
     };
+    
+    Ok(())
+}
+
+fn cmd_constellation(brain: &Brain, args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_brain::Constellation;
+    
+    let mut output = "constellation.html";
+    let mut limit = 200;
+    let mut open_browser = false;
+    
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--output" | "-o" => {
+                if i + 1 < args.len() {
+                    output = args[i + 1].as_str();
+                    i += 2;
+                    continue;
+                }
+            }
+            "--limit" | "-n" => {
+                if i + 1 < args.len() {
+                    limit = args[i + 1].parse().unwrap_or(200);
+                    i += 2;
+                    continue;
+                }
+            }
+            "--open" => {
+                open_browser = true;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    
+    if !quiet {
+        println!("🌌 Generating constellation view...");
+    }
+    
+    let constellation = Constellation::from_brain(brain, limit);
+    let html = constellation.to_html();
+    
+    std::fs::write(output, &html)?;
+    
+    if !quiet {
+        println!("✅ Constellation saved to {}", output);
+        println!("   {} stars, {} clusters", constellation.stars.len(), constellation.clusters.len());
+    }
+    
+    if open_browser {
+        #[cfg(target_os = "macos")]
+        std::process::Command::new("open").arg(output).spawn()?;
+        #[cfg(target_os = "linux")]
+        std::process::Command::new("xdg-open").arg(output).spawn()?;
+        #[cfg(target_os = "windows")]
+        std::process::Command::new("start").arg(output).spawn()?;
+    }
     
     Ok(())
 }
@@ -2234,6 +2313,8 @@ async fn open_visual_db(db_path: &str) -> coredb::CoreDB {
         compaction_throughput_mb_per_sec: 16,
         concurrent_reads: 32,
         concurrent_writes: 32,
+        block_cache_size_mb: 64,
+        block_cache_max_entries: 5_000,
     };
     
     coredb::CoreDB::new(config).await.expect("Failed to open CoreDB")

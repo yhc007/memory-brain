@@ -42,6 +42,8 @@ impl Storage {
             compaction_throughput_mb_per_sec: 16,
             concurrent_reads: 32,
             concurrent_writes: 32,
+            block_cache_size_mb: 64,        // 64MB cache
+            block_cache_max_entries: 5_000,
         };
 
         let db = if in_runtime {
