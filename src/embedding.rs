@@ -171,6 +171,81 @@ impl Embedder for HashEmbedder {
     }
 }
 
+/// HTTP-based embedder (connects to BGE-M3 server)
+/// 
+/// Uses the embedding server at localhost:3200 (or configured URL)
+pub struct HttpEmbedder {
+    url: String,
+    dimension: usize,
+}
+
+impl HttpEmbedder {
+    /// Create a new HTTP embedder connecting to BGE-M3 server
+    pub fn new(url: &str) -> Self {
+        Self {
+            url: url.to_string(),
+            dimension: 1024, // BGE-M3 dimension
+        }
+    }
+    
+    /// Create with default URL (localhost:3200)
+    pub fn default() -> Self {
+        Self::new("http://localhost:3200")
+    }
+    
+    /// Batch embed multiple texts (more efficient)
+    pub fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+        let payload = serde_json::json!({
+            "texts": texts,
+            "return_sparse": false,
+            "return_colbert": false
+        });
+        
+        let resp = ureq::post(&format!("{}/embed", self.url))
+            .set("Content-Type", "application/json")
+            .send_json(&payload)
+            .map_err(|e| format!("HTTP error: {}", e))?;
+        
+        let body: serde_json::Value = resp.into_json()
+            .map_err(|e| format!("JSON parse error: {}", e))?;
+        
+        let dense = body["dense"].as_array()
+            .ok_or("Missing 'dense' field")?;
+        
+        dense.iter()
+            .map(|v| {
+                v.as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|x| x.as_f64().unwrap_or(0.0) as f32)
+                            .collect::<Vec<f32>>()
+                    })
+                    .ok_or_else(|| "Invalid vector format".to_string())
+            })
+            .collect()
+    }
+    
+    /// Check if server is available
+    pub fn health_check(&self) -> bool {
+        ureq::get(&format!("{}/health", self.url))
+            .call()
+            .is_ok()
+    }
+}
+
+impl Embedder for HttpEmbedder {
+    fn embed(&self, text: &str) -> Vec<f32> {
+        match self.embed_batch(&[text]) {
+            Ok(vecs) if !vecs.is_empty() => vecs.into_iter().next().unwrap(),
+            _ => vec![0.0; self.dimension], // Fallback on error
+        }
+    }
+    
+    fn dimension(&self) -> usize {
+        self.dimension
+    }
+}
+
 /// MLX-based embedder using learned word embeddings
 /// 
 /// This uses MLX for efficient embedding lookup on Apple Silicon.

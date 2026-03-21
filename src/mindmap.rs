@@ -108,6 +108,117 @@ impl MindMap {
         Self { nodes, edges }
     }
 
+    /// Build mind map with optional query filter
+    /// When query is provided, shows only matching memories and their connections
+    pub fn from_brain_filtered(brain: &Brain, query: Option<&str>, limit: usize, threshold: f32) -> Self {
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+        let mut memories: Vec<MemoryItem> = Vec::new();
+        let mut matched_ids: HashSet<String> = HashSet::new();
+
+        // Gather memories based on query
+        match query {
+            Some(q) if !q.is_empty() => {
+                // Search for matching memories
+                if let Ok(items) = brain.semantic.search(q, limit) {
+                    for item in &items {
+                        matched_ids.insert(item.id.to_string());
+                    }
+                    memories.extend(items);
+                }
+                
+                // Also search episodic
+                if let Ok(items) = brain.episodic.search(q, limit) {
+                    for item in items {
+                        if !matched_ids.contains(&item.id.to_string()) {
+                            matched_ids.insert(item.id.to_string());
+                            memories.push(item);
+                        }
+                    }
+                }
+            }
+            _ => {
+                // No query - get all memories
+                if let Ok(items) = brain.semantic.search("", limit) {
+                    memories.extend(items);
+                }
+            }
+        }
+
+        if memories.is_empty() {
+            return Self { nodes, edges };
+        }
+
+        // Assign groups based on tags
+        let mut tag_groups: HashMap<String, usize> = HashMap::new();
+        let mut next_group = 0;
+
+        // Track which memories matched the query (for highlighting)
+        let is_query_mode = query.is_some() && !query.unwrap_or("").is_empty();
+
+        // Create nodes
+        for memory in &memories {
+            let primary_tag = memory.tags.first().cloned().unwrap_or_else(|| "general".to_string());
+            
+            let group = *tag_groups.entry(primary_tag.clone()).or_insert_with(|| {
+                let g = next_group;
+                next_group += 1;
+                g
+            });
+
+            let label = truncate(&memory.content, 20);
+            
+            // In query mode, matched nodes are larger
+            let size = if is_query_mode {
+                (memory.strength * 12.0 + 8.0).min(25.0)
+            } else {
+                (memory.strength * 10.0 + 5.0).min(20.0)
+            };
+            
+            nodes.push(MapNode {
+                id: memory.id.to_string(),
+                label,
+                content: memory.content.clone(),
+                group,
+                size,
+                tags: memory.tags.clone(),
+            });
+        }
+
+        // Create edges based on similarity
+        let mut seen_pairs: HashSet<(String, String)> = HashSet::new();
+        
+        for i in 0..memories.len() {
+            for j in (i + 1)..memories.len() {
+                if let (Some(emb_a), Some(emb_b)) = (&memories[i].embedding, &memories[j].embedding) {
+                    let sim = cosine_similarity(emb_a, emb_b);
+                    
+                    if sim > threshold {
+                        let id_a = memories[i].id.to_string();
+                        let id_b = memories[j].id.to_string();
+                        
+                        let pair = if id_a < id_b {
+                            (id_a.clone(), id_b.clone())
+                        } else {
+                            (id_b.clone(), id_a.clone())
+                        };
+                        
+                        if !seen_pairs.contains(&pair) {
+                            seen_pairs.insert(pair);
+                            edges.push(MapEdge {
+                                source: id_a,
+                                target: id_b,
+                                weight: sim,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Self { nodes, edges }
+    }
+
     /// Generate interactive HTML
     pub fn to_html(&self) -> String {
         let nodes_json = self.nodes_to_json();
@@ -216,11 +327,79 @@ impl MindMap {
             border-radius: 50%;
             margin-right: 8px;
         }}
+        #search-box {{
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            z-index: 100;
+        }}
+        #search-input {{
+            width: 250px;
+            padding: 10px 15px;
+            font-size: 14px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            outline: none;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }}
+        #search-input::placeholder {{
+            color: rgba(255,255,255,0.5);
+        }}
+        #search-input:focus {{
+            background: rgba(255,255,255,0.25);
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }}
+        #search-clear {{
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            font-size: 16px;
+            display: none;
+        }}
+        #search-clear:hover {{
+            color: #fff;
+        }}
+        #search-results {{
+            margin-top: 8px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+        }}
+        .node.dimmed circle {{
+            opacity: 0.15;
+        }}
+        .node.dimmed text {{
+            opacity: 0.15;
+        }}
+        .node.highlighted circle {{
+            stroke: #ffcc00;
+            stroke-width: 4px;
+            filter: brightness(1.3) drop-shadow(0 0 10px rgba(255,204,0,0.5));
+        }}
+        .link.dimmed {{
+            opacity: 0.05;
+        }}
+        .link.highlighted {{
+            stroke: rgba(255,204,0,0.6);
+            stroke-width: 2px;
+        }}
     </style>
 </head>
 <body>
     <div id="container"></div>
     <div id="title">🧠 Memory Mind Map</div>
+    <div id="search-box">
+        <input type="text" id="search-input" placeholder="🔍 검색어 입력..." />
+        <button id="search-clear">✕</button>
+        <div id="search-results"></div>
+    </div>
     <div id="stats">{} nodes, {} connections</div>
     <div id="tooltip"></div>
     <div id="legend"></div>
@@ -286,6 +465,8 @@ impl MindMap {
         // Tooltip
         const tooltip = d3.select("#tooltip");
         
+        let selectedNode = null;
+        
         node.on("mouseover", (event, d) => {{
             tooltip.style("display", "block")
                 .html(`<strong>${{d.label}}</strong><br>${{d.content}}<div class="tags">${{d.tags.map(t => `<span>#${{t}}</span>`).join('')}}</div>`)
@@ -294,6 +475,74 @@ impl MindMap {
         }})
         .on("mouseout", () => {{
             tooltip.style("display", "none");
+        }})
+        .on("click", (event, d) => {{
+            event.stopPropagation();
+            focusOnNode(d);
+        }});
+        
+        // Focus on a specific node
+        function focusOnNode(d) {{
+            selectedNode = d;
+            
+            // Find connected nodes
+            const connectedIds = new Set([d.id]);
+            links.forEach(l => {{
+                const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                if (sourceId === d.id) connectedIds.add(targetId);
+                if (targetId === d.id) connectedIds.add(sourceId);
+            }});
+            
+            // Update node visibility
+            node.classed('highlighted', n => n.id === d.id)
+                .classed('dimmed', n => !connectedIds.has(n.id));
+            
+            // Update link visibility
+            link.classed('highlighted', l => {{
+                const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                return sourceId === d.id || targetId === d.id;
+            }})
+            .classed('dimmed', l => {{
+                const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                return sourceId !== d.id && targetId !== d.id;
+            }});
+            
+            // Zoom to the node
+            const scale = 1.5;
+            const x = width / 2 - d.x * scale;
+            const y = height / 2 - d.y * scale;
+            
+            svg.transition()
+                .duration(750)
+                .call(
+                    d3.zoom().transform,
+                    d3.zoomIdentity.translate(x, y).scale(scale)
+                );
+            
+            // Update search results to show context
+            searchResults.textContent = `"${{d.label}}" 선택됨 - ${{connectedIds.size - 1}}개 연결`;
+            searchInput.value = '';
+        }}
+        
+        // Click on background to reset
+        svg.on("click", () => {{
+            if (selectedNode) {{
+                selectedNode = null;
+                node.classed('dimmed', false).classed('highlighted', false);
+                link.classed('dimmed', false).classed('highlighted', false);
+                searchResults.textContent = '';
+                
+                // Reset zoom
+                svg.transition()
+                    .duration(750)
+                    .call(
+                        d3.zoom().transform,
+                        d3.zoomIdentity
+                    );
+            }}
         }});
         
         // Update positions
@@ -339,6 +588,88 @@ impl MindMap {
             legend.append("div")
                 .attr("class", "item")
                 .html(`<div class="dot" style="background:${{colors[g % 10]}}"></div>${{tagNames[g] || 'Group ' + g}}`);
+        }});
+        
+        // Search functionality
+        const searchInput = document.getElementById('search-input');
+        const searchClear = document.getElementById('search-clear');
+        const searchResults = document.getElementById('search-results');
+        
+        function searchNodes(query) {{
+            query = query.toLowerCase().trim();
+            
+            if (!query) {{
+                // Reset all nodes and links
+                node.classed('dimmed', false).classed('highlighted', false);
+                link.classed('dimmed', false).classed('highlighted', false);
+                searchResults.textContent = '';
+                searchClear.style.display = 'none';
+                return;
+            }}
+            
+            searchClear.style.display = 'block';
+            
+            // Find matching nodes
+            const matchedIds = new Set();
+            nodes.forEach(n => {{
+                const searchText = (n.content + ' ' + n.tags.join(' ')).toLowerCase();
+                if (searchText.includes(query)) {{
+                    matchedIds.add(n.id);
+                }}
+            }});
+            
+            // Find connected nodes (1 hop)
+            const connectedIds = new Set(matchedIds);
+            links.forEach(l => {{
+                const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                if (matchedIds.has(sourceId)) connectedIds.add(targetId);
+                if (matchedIds.has(targetId)) connectedIds.add(sourceId);
+            }});
+            
+            // Update node classes
+            node.classed('highlighted', d => matchedIds.has(d.id))
+                .classed('dimmed', d => !connectedIds.has(d.id));
+            
+            // Update link classes
+            link.classed('highlighted', d => {{
+                const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                return matchedIds.has(sourceId) || matchedIds.has(targetId);
+            }})
+            .classed('dimmed', d => {{
+                const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                return !connectedIds.has(sourceId) && !connectedIds.has(targetId);
+            }});
+            
+            searchResults.textContent = `${{matchedIds.size}}개 매칭, ${{connectedIds.size - matchedIds.size}}개 연결`;
+        }}
+        
+        // Debounce for smooth typing
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {{
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => searchNodes(e.target.value), 150);
+        }});
+        
+        searchClear.addEventListener('click', () => {{
+            searchInput.value = '';
+            searchNodes('');
+            searchInput.focus();
+        }});
+        
+        // Keyboard shortcut: Escape to clear
+        document.addEventListener('keydown', (e) => {{
+            if (e.key === 'Escape') {{
+                searchInput.value = '';
+                searchNodes('');
+            }}
+            // Ctrl/Cmd + F to focus search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {{
+                e.preventDefault();
+                searchInput.focus();
+            }}
         }});
     </script>
 </body>

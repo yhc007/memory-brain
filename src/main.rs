@@ -2,10 +2,11 @@
 //!
 //! Human-inspired memory system with semantic search.
 
-use memory_brain::{Brain, GloVeEmbedder, MemoryItem, MemoryType, MemoryChat, auto_detect_provider};
+use memory_brain::{Brain, GloVeEmbedder, HttpEmbedder, VecDbStorage, MemoryItem, MemoryType, MemoryChat, auto_detect_provider};
 use std::env;
 use std::io::{self, Write};
 use std::sync::Arc;
+use std::cell::RefCell;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -35,29 +36,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Initialize embedder
-    let glove_path = dirs::data_local_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("memory-brain")
-        .join("glove.6B.100d.txt");
-
-    let mut brain = if glove_path.exists() {
-        match GloVeEmbedder::load(&glove_path, Some(50000)) {
-            Ok(embedder) => {
-                if !quiet { println!("📚 GloVe embeddings loaded"); }
-                Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
-            }
-            Err(e) => {
-                if !quiet { eprintln!("⚠️ GloVe load failed: {}", e); }
-                let embedder = GloVeEmbedder::test_embedder();
-                Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
-            }
-        }
+    // Priority: 1) EMBEDDING_SERVER_URL env, 2) localhost:3200 if running, 3) GloVe, 4) test
+    let embedding_server_url = env::var("EMBEDDING_SERVER_URL")
+        .unwrap_or_else(|_| "http://localhost:3200".to_string());
+    
+    let http_embedder = HttpEmbedder::new(&embedding_server_url);
+    
+    let mut brain = if http_embedder.health_check() {
+        // BGE-M3 server available - use it!
+        if !quiet { println!("🚀 Using BGE-M3 server ({})", embedding_server_url); }
+        Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(http_embedder))?
     } else {
-        let embedder = GloVeEmbedder::test_embedder();
-        if !quiet {
-            println!("🧪 Using test embedder");
+        // Fall back to GloVe or test embedder
+        let glove_path = dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("memory-brain")
+            .join("glove.6B.100d.txt");
+        
+        if glove_path.exists() {
+            match GloVeEmbedder::load(&glove_path, Some(50000)) {
+                Ok(embedder) => {
+                    if !quiet { println!("📚 GloVe embeddings loaded"); }
+                    Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
+                }
+                Err(e) => {
+                    if !quiet { eprintln!("⚠️ GloVe load failed: {}", e); }
+                    let embedder = GloVeEmbedder::test_embedder();
+                    Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
+                }
+            }
+        } else {
+            let embedder = GloVeEmbedder::test_embedder();
+            if !quiet {
+                println!("🧪 Using test embedder (start embedding server for better results)");
+            }
+            Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
         }
-        Brain::with_embedder(db_path.to_str().unwrap(), Arc::new(embedder))?
     };
 
     // Auto-rebuild indexes for fast search (O(1) keyword lookup)
@@ -304,13 +318,33 @@ fn cmd_store(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box<
     let mut item = MemoryItem::new(&content, None)
         .with_type(memory_type.clone())
         .with_tags(tags.clone());
-    item.embedding = Some(embedding);
+    item.embedding = Some(embedding.clone());
 
+    // Store in CoreDB (legacy)
     match memory_type {
-        MemoryType::Episodic => brain.episodic.store(item)?,
-        MemoryType::Semantic => brain.semantic.store(item)?,
-        MemoryType::Procedural => brain.procedural.store(item)?,
-        _ => brain.semantic.store(item)?,
+        MemoryType::Episodic => brain.episodic.store(item.clone())?,
+        MemoryType::Semantic => brain.semantic.store(item.clone())?,
+        MemoryType::Procedural => brain.procedural.store(item.clone())?,
+        _ => brain.semantic.store(item.clone())?,
+    }
+
+    // 🚀 Also store in CoreVecDB if available
+    let vecdb_url = env::var("COREVECDB_URL")
+        .unwrap_or_else(|_| "http://localhost:3100".to_string());
+    
+    if let Ok(vecdb) = VecDbStorage::new(&vecdb_url, Some("memories")) {
+        match vecdb.store(&item, &embedding) {
+            Ok(vec_id) => {
+                if !quiet {
+                    print!("📦 VecDB ID: {} ", vec_id);
+                }
+            }
+            Err(e) => {
+                if !quiet {
+                    eprintln!("⚠️ VecDB store failed: {}", e);
+                }
+            }
+        }
     }
 
     // Audit log
@@ -420,6 +454,8 @@ fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
         eprintln!("  --regex            Use regex matching");
         eprintln!("  --fuzzy            Fuzzy search (typo tolerant)");
         eprintln!("  --type TYPE        Filter by type (semantic/episodic/procedural)");
+        eprintln!("  --vecdb            Use CoreVecDB vector search (default: auto)");
+        eprintln!("  --no-vecdb         Disable CoreVecDB search");
         return Ok(());
     }
 
@@ -428,6 +464,7 @@ fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
     let mut type_filter: Option<MemoryType> = None;
     let mut use_regex = false;
     let mut use_fuzzy = false;
+    let mut use_vecdb: Option<bool> = None;  // None = auto (try if available)
     let mut query_parts: Vec<&str> = Vec::new();
 
     let mut i = 0;
@@ -469,6 +506,16 @@ fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
                 i += 1;
                 continue;
             }
+            "--vecdb" => {
+                use_vecdb = Some(true);
+                i += 1;
+                continue;
+            }
+            "--no-vecdb" => {
+                use_vecdb = Some(false);
+                i += 1;
+                continue;
+            }
             s if s.starts_with("--tag=") => {
                 tag_filter = Some(s.trim_start_matches("--tag=").to_string());
                 i += 1;
@@ -499,7 +546,44 @@ fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
         limit
     };
     
-    let mut memories = brain.recall(&query, fetch_limit);
+    // 🚀 CoreVecDB vector search (if available and not disabled)
+    let vecdb_url = std::env::var("COREVECDB_URL")
+        .unwrap_or_else(|_| "http://localhost:3100".to_string());
+    
+    let should_use_vecdb = use_vecdb.unwrap_or(true);  // Default: try VecDB
+    let mut vecdb_used = false;
+    
+    let mut memories: Vec<MemoryItem> = if should_use_vecdb && !query.is_empty() {
+        // Try VecDB first
+        if let Ok(vecdb) = VecDbStorage::new(&vecdb_url, Some("memories")) {
+            // Get query embedding
+            let query_embedding = brain.embedder().embed(&query);
+            
+            // Convert type filter to string
+            let type_filter_str = type_filter.as_ref().map(|t| format!("{:?}", t));
+            
+            match vecdb.search_memories(&query_embedding, fetch_limit, type_filter_str.as_deref()) {
+                Ok(results) => {
+                    vecdb_used = true;
+                    if !quiet {
+                        eprintln!("🔍 VecDB: {} results", results.len());
+                    }
+                    results.into_iter().map(|(item, _score)| item).collect()
+                }
+                Err(e) => {
+                    if !quiet {
+                        eprintln!("⚠️ VecDB search failed: {}, falling back to Brain", e);
+                    }
+                    brain.recall(&query, fetch_limit)
+                }
+            }
+        } else {
+            // VecDB not available, use Brain
+            brain.recall(&query, fetch_limit)
+        }
+    } else {
+        brain.recall(&query, fetch_limit)
+    };
 
     // Apply regex filter
     if use_regex && !query.is_empty() {
@@ -547,6 +631,9 @@ fn cmd_recall(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
     } else {
         if !quiet { 
             print!("🧠 Found {} memories", memories.len());
+            if vecdb_used {
+                print!(" [vecdb]");
+            }
             if let Some(ref tag) = tag_filter {
                 print!(" [tag: {}]", tag);
             }

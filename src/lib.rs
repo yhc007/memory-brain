@@ -21,6 +21,7 @@ pub mod consolidate;
 pub mod forgetting;
 pub mod types;
 pub mod storage;
+pub mod vecdb_storage;  // CoreVecDB HTTP backend
 pub mod embedding;
 pub mod glove;
 pub mod llm;
@@ -38,6 +39,7 @@ pub mod server;
 pub mod sam;
 pub mod dream;
 pub mod mindmap;
+pub mod constellation;
 pub mod predict;
 pub mod tui;
 pub mod web_ui;
@@ -52,6 +54,8 @@ pub mod vlm;
 pub mod hippocampus;
 
 // coredb_storage merged into storage.rs
+// vecdb_storage - CoreVecDB HTTP backend (no CQL parsing issues!)
+pub use vecdb_storage::VecDbStorage;
 
 pub use types::*;
 pub use working::WorkingMemory;
@@ -60,7 +64,7 @@ pub use semantic::SemanticMemory;
 pub use procedural::ProceduralMemory;
 pub use consolidate::Consolidator;
 pub use forgetting::ForgettingCurve;
-pub use embedding::{Embedder, HashEmbedder, TfIdfEmbedder, cosine_similarity};
+pub use embedding::{Embedder, HashEmbedder, TfIdfEmbedder, HttpEmbedder, cosine_similarity};
 pub use glove::GloVeEmbedder;
 pub use llm::{LlmProvider, OllamaProvider, OpenAIProvider, MlxLmProvider, EchoProvider, MemoryChat, auto_detect_provider};
 pub use cache::{CachedEmbedder, CacheStats, BatchProcessor};
@@ -73,6 +77,7 @@ pub use merge::{MemoryMerger, MergeConfig, MergeResult, analyze_duplicates, merg
 pub use sam::{SamBrain, SamMemory, SamMemoryType, SamBrainStats};
 pub use dream::{DreamEngine, DreamState, DreamPhase};
 pub use mindmap::MindMap;
+pub use constellation::Constellation;
 pub use predict::{Predictor, Prediction, ForgettingAlert, Pattern};
 #[cfg(feature = "mlx")]
 pub use embedding::{MlxEmbedder, create_mlx_embedder};
