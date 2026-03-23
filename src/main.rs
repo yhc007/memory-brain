@@ -889,13 +889,24 @@ fn cmd_delete(brain: &mut Brain, args: &[String], quiet: bool) -> Result<(), Box
 fn cmd_stats(brain: &Brain, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     if !quiet { println!("🧠 Brain Statistics\n"); }
 
+    // CoreVecDB stats (primary)
+    let vecdb_url = std::env::var("COREVECDB_URL")
+        .unwrap_or_else(|_| "http://localhost:3100".to_string());
+    
+    let vecdb_count = if let Ok(vecdb) = VecDbStorage::new(&vecdb_url, Some("memories")) {
+        vecdb.stats().map(|(count, _)| count).unwrap_or(0)
+    } else {
+        0
+    };
+
     let working_count = brain.working.len();
     let semantic_count = brain.semantic.search("", 10000).map(|v| v.len()).unwrap_or(0);
     let episodic_count = brain.episodic.get_recent(10000).map(|v| v.len()).unwrap_or(0);
 
+    println!("  CoreVecDB:       {} vectors ✨", vecdb_count);
     println!("  Working Memory:  {} / 7 slots", working_count);
-    println!("  Semantic Memory: {} items", semantic_count);
-    println!("  Episodic Memory: {} items", episodic_count);
+    println!("  Semantic (legacy): {} items", semantic_count);
+    println!("  Episodic (legacy): {} items", episodic_count);
     println!("  Embedding Dim:   {}d", brain.embedder().dimension());
     
     let db_path = dirs::data_local_dir()
