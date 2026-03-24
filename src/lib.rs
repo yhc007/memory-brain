@@ -23,6 +23,7 @@ pub mod types;
 pub mod schema;  // Semantic Schema Layer (CoreDB + CoreVecDB 통합)
 pub mod semantic_store;  // SemanticStore 구현체
 pub mod memory_actor;    // pekko-style Actor
+pub mod coredb_store;    // CoreDB 영속 저장소
 pub mod storage;
 pub mod vecdb_storage;  // CoreVecDB HTTP backend
 pub mod embedding;
