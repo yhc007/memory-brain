@@ -20,6 +20,7 @@ pub mod procedural;
 pub mod consolidate;
 pub mod forgetting;
 pub mod types;
+pub mod schema;  // Semantic Schema Layer (CoreDB + CoreVecDB 통합)
 pub mod storage;
 pub mod vecdb_storage;  // CoreVecDB HTTP backend
 pub mod embedding;
