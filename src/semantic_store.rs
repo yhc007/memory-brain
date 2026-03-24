@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::schema::{Memory, MemoryLink, RelationType, SemanticStore, StoreStats};
 use crate::types::MemoryType;
 use crate::embedding::Embedder;
+use crate::coredb_store::CoreDBStore;
 
 // ============================================================================
 // CoreVecDB Client
@@ -152,12 +153,14 @@ pub struct SemanticLayer {
     vecdb: VecDBClient,
     /// 임베딩 모델
     embedder: Arc<dyn Embedder>,
-    /// 인메모리 저장소 (CoreDB 연동 전 임시)
-    store: Arc<RwLock<MemoryStore>>,
+    /// 인메모리 저장소 (폴백용)
+    memory_store: Arc<RwLock<MemoryStore>>,
+    /// CoreDB 영속 저장소 (옵션)
+    coredb: Option<Arc<CoreDBStore>>,
 }
 
 impl SemanticLayer {
-    /// 새 SemanticLayer 생성
+    /// 새 SemanticLayer 생성 (인메모리 전용)
     pub fn new(
         vecdb_url: &str,
         collection: &str,
@@ -166,13 +169,39 @@ impl SemanticLayer {
         Self {
             vecdb: VecDBClient::new(vecdb_url, collection),
             embedder,
-            store: Arc::new(RwLock::new(MemoryStore::new())),
+            memory_store: Arc::new(RwLock::new(MemoryStore::new())),
+            coredb: None,
         }
+    }
+    
+    /// CoreDB 영속 저장소와 함께 생성
+    pub fn with_coredb(
+        vecdb_url: &str,
+        collection: &str,
+        embedder: Arc<dyn Embedder>,
+        coredb: CoreDBStore,
+    ) -> Self {
+        Self {
+            vecdb: VecDBClient::new(vecdb_url, collection),
+            embedder,
+            memory_store: Arc::new(RwLock::new(MemoryStore::new())),
+            coredb: Some(Arc::new(coredb)),
+        }
+    }
+    
+    /// CoreDB 설정
+    pub fn set_coredb(&mut self, coredb: CoreDBStore) {
+        self.coredb = Some(Arc::new(coredb));
     }
     
     /// 임베딩 생성
     fn embed(&self, text: &str) -> Vec<f32> {
         self.embedder.embed(text)
+    }
+    
+    /// CoreDB 사용 여부
+    pub fn has_coredb(&self) -> bool {
+        self.coredb.is_some()
     }
 }
 
@@ -194,8 +223,13 @@ impl SemanticStore for SemanticLayer {
         memory.vector_id = Some(vec_id);
         memory.embedding_cache = Some(embedding);
         
-        // 2. 인메모리 저장소에 저장 (나중에 CoreDB로 교체)
-        let mut store = self.store.write().await;
+        // 2. CoreDB에 저장 (있으면)
+        if let Some(ref coredb) = self.coredb {
+            coredb.insert(&memory).await?;
+        }
+        
+        // 3. 인메모리 캐시에도 저장
+        let mut store = self.memory_store.write().await;
         store.memories.insert(id, memory);
         
         Ok(id)
@@ -208,26 +242,49 @@ impl SemanticStore for SemanticLayer {
         // 2. CoreVecDB 검색
         let results = self.vecdb.search(query_vec, k).await?;
         
-        // 3. ID로 메모리 조회
-        let store = self.store.read().await;
-        let memories: Vec<Memory> = results
-            .iter()
-            .filter_map(|r| {
-                Uuid::parse_str(&r.id).ok()
-                    .and_then(|id| store.memories.get(&id).cloned())
-            })
+        // 3. ID로 메모리 조회 (CoreDB 우선, 없으면 인메모리)
+        let ids: Vec<Uuid> = results.iter()
+            .filter_map(|r| Uuid::parse_str(&r.id).ok())
+            .collect();
+        
+        if let Some(ref coredb) = self.coredb {
+            let memories = coredb.get_many(&ids).await?;
+            if !memories.is_empty() {
+                return Ok(memories);
+            }
+        }
+        
+        // 폴백: 인메모리
+        let store = self.memory_store.read().await;
+        let memories: Vec<Memory> = ids.iter()
+            .filter_map(|id| store.memories.get(id).cloned())
             .collect();
         
         Ok(memories)
     }
     
     async fn get(&self, id: Uuid) -> Result<Option<Memory>> {
-        let store = self.store.read().await;
+        // CoreDB 우선
+        if let Some(ref coredb) = self.coredb {
+            if let Some(memory) = coredb.get(id).await? {
+                return Ok(Some(memory));
+            }
+        }
+        // 폴백: 인메모리
+        let store = self.memory_store.read().await;
         Ok(store.memories.get(&id).cloned())
     }
     
     async fn get_many(&self, ids: Vec<Uuid>) -> Result<Vec<Memory>> {
-        let store = self.store.read().await;
+        // CoreDB 우선
+        if let Some(ref coredb) = self.coredb {
+            let memories = coredb.get_many(&ids).await?;
+            if !memories.is_empty() {
+                return Ok(memories);
+            }
+        }
+        // 폴백: 인메모리
+        let store = self.memory_store.read().await;
         let memories: Vec<Memory> = ids
             .iter()
             .filter_map(|id| store.memories.get(id).cloned())
@@ -236,7 +293,12 @@ impl SemanticStore for SemanticLayer {
     }
     
     async fn update(&self, memory: &Memory) -> Result<()> {
-        let mut store = self.store.write().await;
+        // CoreDB 업데이트
+        if let Some(ref coredb) = self.coredb {
+            coredb.update(memory).await?;
+        }
+        // 인메모리도 업데이트
+        let mut store = self.memory_store.write().await;
         store.memories.insert(memory.id, memory.clone());
         Ok(())
     }
@@ -245,8 +307,14 @@ impl SemanticStore for SemanticLayer {
         // 1. CoreVecDB에서 삭제
         self.vecdb.delete(&id.to_string()).await?;
         
-        // 2. 인메모리에서 삭제
-        let mut store = self.store.write().await;
+        // 2. CoreDB에서 삭제
+        if let Some(ref coredb) = self.coredb {
+            coredb.delete(id).await?;
+            coredb.delete_links(id).await?;
+        }
+        
+        // 3. 인메모리에서 삭제
+        let mut store = self.memory_store.write().await;
         store.memories.remove(&id);
         store.links.remove(&id);
         
@@ -256,7 +324,13 @@ impl SemanticStore for SemanticLayer {
     async fn link(&self, from: Uuid, to: Uuid, relation: RelationType, weight: f32) -> Result<()> {
         let link = MemoryLink::new(from, to, relation).with_weight(weight);
         
-        let mut store = self.store.write().await;
+        // CoreDB에 저장
+        if let Some(ref coredb) = self.coredb {
+            coredb.insert_link(&link).await?;
+        }
+        
+        // 인메모리에도 저장
+        let mut store = self.memory_store.write().await;
         store.links
             .entry(from)
             .or_insert_with(Vec::new)
@@ -266,58 +340,101 @@ impl SemanticStore for SemanticLayer {
     }
     
     async fn get_links(&self, memory_id: Uuid) -> Result<Vec<MemoryLink>> {
-        let store = self.store.read().await;
+        // CoreDB 우선
+        if let Some(ref coredb) = self.coredb {
+            let links = coredb.get_links(memory_id).await?;
+            if !links.is_empty() {
+                return Ok(links);
+            }
+        }
+        // 폴백: 인메모리
+        let store = self.memory_store.read().await;
         Ok(store.links.get(&memory_id).cloned().unwrap_or_default())
     }
     
     async fn strengthen(&self, id: Uuid) -> Result<()> {
-        let mut store = self.store.write().await;
-        if let Some(memory) = store.memories.get_mut(&id) {
+        // 메모리 조회 후 업데이트
+        if let Some(mut memory) = self.get(id).await? {
             memory.access();
+            self.update(&memory).await?;
         }
         Ok(())
     }
     
     async fn decay_all(&self, factor: f32) -> Result<u64> {
-        let mut store = self.store.write().await;
         let mut count = 0u64;
+        let mut forgotten: Vec<Uuid> = Vec::new();
         
-        for memory in store.memories.values_mut() {
-            memory.decay(factor);
-            count += 1;
+        // CoreDB가 있으면 전체 조회해서 업데이트
+        if let Some(ref coredb) = self.coredb {
+            let all_memories = coredb.get_all().await?;
+            for mut memory in all_memories {
+                memory.decay(factor);
+                count += 1;
+                
+                if memory.is_forgotten() {
+                    forgotten.push(memory.id);
+                } else {
+                    coredb.update(&memory).await?;
+                }
+            }
+        } else {
+            // 인메모리만
+            let mut store = self.memory_store.write().await;
+            for memory in store.memories.values_mut() {
+                memory.decay(factor);
+                count += 1;
+                
+                if memory.is_forgotten() {
+                    forgotten.push(memory.id);
+                }
+            }
         }
         
         // 잊혀진 기억 제거
-        let forgotten: Vec<Uuid> = store.memories
-            .iter()
-            .filter(|(_, m)| m.is_forgotten())
-            .map(|(id, _)| *id)
-            .collect();
-        
         for id in &forgotten {
-            store.memories.remove(id);
-            store.links.remove(id);
-            // VecDB에서도 삭제 (비동기로 처리)
-            let _ = self.vecdb.delete(&id.to_string()).await;
+            self.delete(*id).await?;
         }
         
         Ok(count)
     }
     
     async fn stats(&self) -> Result<StoreStats> {
-        let store = self.store.read().await;
         let vec_count = self.vecdb.stats().await.unwrap_or(0);
         
         let mut by_type: HashMap<String, u64> = HashMap::new();
         let mut total_strength = 0.0f32;
+        let mut total = 0u64;
+        let mut total_links = 0u64;
         
-        for memory in store.memories.values() {
-            let type_str = format!("{:?}", memory.memory_type);
-            *by_type.entry(type_str).or_insert(0) += 1;
-            total_strength += memory.strength;
+        // CoreDB 우선
+        if let Some(ref coredb) = self.coredb {
+            let all_memories = coredb.get_all().await?;
+            total = all_memories.len() as u64;
+            
+            for memory in &all_memories {
+                let type_str = format!("{:?}", memory.memory_type);
+                *by_type.entry(type_str).or_insert(0) += 1;
+                total_strength += memory.strength;
+                
+                // 링크 카운트
+                let links = coredb.get_links(memory.id).await?;
+                total_links += links.len() as u64;
+            }
+        } else {
+            // 인메모리
+            let store = self.memory_store.read().await;
+            total = store.memories.len() as u64;
+            
+            for memory in store.memories.values() {
+                let type_str = format!("{:?}", memory.memory_type);
+                *by_type.entry(type_str).or_insert(0) += 1;
+                total_strength += memory.strength;
+            }
+            
+            total_links = store.links.values().map(|v| v.len() as u64).sum();
         }
         
-        let total = store.memories.len() as u64;
         let avg_strength = if total > 0 {
             total_strength / total as f32
         } else {
@@ -326,7 +443,7 @@ impl SemanticStore for SemanticLayer {
         
         Ok(StoreStats {
             total_memories: total,
-            total_links: store.links.values().map(|v| v.len() as u64).sum(),
+            total_links,
             total_vectors: vec_count,
             memories_by_type: by_type,
             avg_strength,
@@ -343,6 +460,7 @@ pub struct SemanticLayerBuilder {
     vecdb_url: String,
     collection: String,
     embedder: Option<Arc<dyn Embedder>>,
+    coredb: Option<CoreDBStore>,
 }
 
 impl SemanticLayerBuilder {
@@ -351,6 +469,7 @@ impl SemanticLayerBuilder {
             vecdb_url: "http://localhost:3100".to_string(),
             collection: "memories".to_string(),
             embedder: None,
+            coredb: None,
         }
     }
     
@@ -369,11 +488,25 @@ impl SemanticLayerBuilder {
         self
     }
     
+    /// CoreDB 영속 저장소 설정
+    pub fn coredb(mut self, coredb: CoreDBStore) -> Self {
+        self.coredb = Some(coredb);
+        self
+    }
+    
     pub fn build(self) -> Result<SemanticLayer> {
         let embedder = self.embedder
             .context("Embedder is required")?;
         
-        Ok(SemanticLayer::new(&self.vecdb_url, &self.collection, embedder))
+        match self.coredb {
+            Some(coredb) => Ok(SemanticLayer::with_coredb(
+                &self.vecdb_url, 
+                &self.collection, 
+                embedder,
+                coredb,
+            )),
+            None => Ok(SemanticLayer::new(&self.vecdb_url, &self.collection, embedder)),
+        }
     }
 }
 
