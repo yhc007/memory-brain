@@ -1,0 +1,27 @@
+[package]
+name = "memory-actor"
+version = "0.1.0"
+edition = "2021"
+description = "CLS-based memory system using Pekko Actor"
+authors = ["Paul Yu <paul.yu@coreon.ai>"]
+
+[dependencies]
+pekko-actor = { path = "/Users/paulyu/workRust/rust-pekko/pekko-actor" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+async-trait = "0.1"
+
+# Memory-brain core (옵션)
+# memory-brain = { path = "../.." }
+
+[features]
+default = []
+pekko = []  # Enable full pekko-actor integration
+
+[dev-dependencies]
+tokio-test = "0.4"

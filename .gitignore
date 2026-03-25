@@ -12,3 +12,4 @@ visual_index/
 memories*.json
 memory_map.html
 ..bfg-report/
+crates/memory-actor/target/

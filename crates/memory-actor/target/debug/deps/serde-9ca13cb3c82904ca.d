@@ -1,0 +1,14 @@
+/Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/deps/serde-9ca13cb3c82904ca.d: /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/build/serde-2d91f1bc73869294/out/private.rs
+
+/Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/deps/libserde-9ca13cb3c82904ca.rlib: /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/build/serde-2d91f1bc73869294/out/private.rs
+
+/Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/deps/libserde-9ca13cb3c82904ca.rmeta: /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/build/serde-2d91f1bc73869294/out/private.rs
+
+/Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/paulyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/build/serde-2d91f1bc73869294/out/private.rs:
+
+# env-dep:OUT_DIR=/Volumes/T7/Work/memory-brain/crates/memory-actor/target/debug/build/serde-2d91f1bc73869294/out
