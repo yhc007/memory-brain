@@ -56,6 +56,9 @@ crossterm = "0.28"
 # Directory paths
 dirs = "6.0"
 
+# Actor-based memory system (CLS)
+memory-actor = { path = "crates/memory-actor" }
+
 # MLX for embeddings (optional)
 mlx-rs = { path = "../MLX/mlx-rs", optional = true }
 

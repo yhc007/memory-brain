@@ -247,6 +247,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd_vlm_status(quiet)?;
         }
 
+        Some("actor") | Some("cls") => {
+            cmd_actor(&args[2..], quiet)?;
+        }
+
         Some(cmd) => {
             eprintln!("❌ Unknown command: {}", cmd);
             eprintln!("Run 'memory-brain help' for usage");
@@ -2536,5 +2540,211 @@ fn cmd_vlm_status(quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
         println!("  ollama pull llava:13b   # 8GB, better quality");
     }
     
+    Ok(())
+}
+
+// ============ Actor-based Memory System (CLS) ============
+
+fn cmd_actor(args: &[String], quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use memory_actor::{
+        HippocampusActor, HippocampusConfig,
+        NeocortexActor, NeocortexConfig,
+        DreamActor, DreamConfig,
+        MemoryContext,
+    };
+
+    let subcommand = args.get(0).map(|s| s.as_str());
+
+    match subcommand {
+        Some("store") | Some("s") => {
+            if args.len() < 2 {
+                eprintln!("Usage: memory-brain actor store <text> [--tags tag1,tag2]");
+                return Ok(());
+            }
+
+            let text = &args[1];
+            let tags: Vec<String> = args.iter()
+                .position(|a| a == "--tags")
+                .and_then(|i| args.get(i + 1))
+                .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
+                .unwrap_or_default();
+
+            let mut actor = HippocampusActor::new(HippocampusConfig::with_backends());
+            let status = actor.backend_status();
+
+            if !quiet {
+                println!("🧠 CLS Memory Actor");
+                println!("  CoreVecDB: {}", if status.vecdb_connected { "✅" } else { "❌" });
+                println!("  Embedding: {} ({}D)", 
+                    if status.embedding_http { "BGE-M3 ✅" } else { "Hash 🔧" },
+                    status.embedding_dim
+                );
+                println!();
+            }
+
+            let id = actor.store(
+                text.clone(),
+                MemoryContext {
+                    source: "cli".to_string(),
+                    tags,
+                    ..Default::default()
+                },
+            );
+
+            if !quiet {
+                println!("✅ Stored: {}", id);
+            } else {
+                println!("{}", id);
+            }
+        }
+
+        Some("recall") | Some("r") => {
+            if args.len() < 2 {
+                eprintln!("Usage: memory-brain actor recall <query> [--limit N]");
+                return Ok(());
+            }
+
+            let query = &args[1];
+            let limit: usize = args.iter()
+                .position(|a| a == "--limit" || a == "-n")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(5);
+
+            let mut actor = HippocampusActor::new(HippocampusConfig::with_backends());
+            let results = actor.recall(query, limit);
+
+            if !quiet {
+                println!("🔍 Recalling: '{}' (top {})\n", query, limit);
+            }
+
+            if results.is_empty() {
+                println!("No memories found.");
+            } else {
+                for (i, r) in results.iter().enumerate() {
+                    println!("{}. [{:.3}] {}", 
+                        i + 1, 
+                        r.similarity,
+                        &r.memory.content
+                    );
+                    if !r.memory.context.tags.is_empty() {
+                        println!("   Tags: {}", r.memory.context.tags.join(", "));
+                    }
+                }
+            }
+        }
+
+        Some("dream") | Some("consolidate") => {
+            let mut hippocampus = HippocampusActor::new(HippocampusConfig::with_backends());
+            let mut neocortex = NeocortexActor::new(NeocortexConfig::with_backends());
+            let mut dream = DreamActor::new(DreamConfig::with_backends());
+
+            if !quiet {
+                println!("🌙 CLS Dream Consolidation\n");
+                println!("  Dream Journal: {}", if dream.has_journal() { "✅" } else { "❌" });
+                println!();
+            }
+
+            let stats = dream.consolidate(&mut hippocampus, &mut neocortex);
+
+            println!("📊 Results:");
+            println!("  Memories processed: {}", stats.memories_processed);
+            println!("  Memories replayed: {}", stats.memories_replayed);
+            println!("  Memories pruned: {}", stats.memories_pruned);
+            println!("  Concepts created: {}", stats.concepts_created);
+            println!("  Associations found: {}", stats.associations_found);
+
+            if !stats.insights.is_empty() {
+                println!("\n💡 Insights:");
+                for insight in &stats.insights {
+                    println!("  - {}", insight);
+                }
+            }
+        }
+
+        Some("concepts") | Some("knowledge") => {
+            let query = args.get(1).map(|s| s.as_str()).unwrap_or("");
+            let limit: usize = args.iter()
+                .position(|a| a == "--limit" || a == "-n")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10);
+
+            let neocortex = NeocortexActor::new(NeocortexConfig::with_backends());
+
+            if !quiet {
+                println!("🧬 Semantic Concepts\n");
+            }
+
+            if query.is_empty() {
+                // List all concepts
+                let concepts = neocortex.all_concepts();
+                if concepts.is_empty() {
+                    println!("No concepts found. Run 'actor dream' to generate concepts.");
+                } else {
+                    for c in concepts.iter().take(limit) {
+                        println!("• {} (level: {:.2})", c.name, c.consolidation_level);
+                        println!("  {}", &c.description[..c.description.len().min(80)]);
+                    }
+                }
+            } else {
+                // Search concepts
+                let results = neocortex.search_concepts(query, limit);
+                if results.is_empty() {
+                    println!("No concepts match '{}'", query);
+                } else {
+                    for (name, score) in &results {
+                        println!("• {} [{:.3}]", name, score);
+                    }
+                }
+            }
+        }
+
+        Some("status") | Some("stats") => {
+            let hippocampus = HippocampusActor::new(HippocampusConfig::with_backends());
+            let neocortex = NeocortexActor::new(NeocortexConfig::with_backends());
+            let dream = DreamActor::new(DreamConfig::with_backends());
+
+            let h_status = hippocampus.backend_status();
+
+            println!("🧠 CLS Memory Actor Status\n");
+            println!("═══════════════════════════════════════════");
+            println!("Backend Connections:");
+            println!("  CoreVecDB:   {}", if h_status.vecdb_connected { "✅ Connected" } else { "❌ Offline" });
+            println!("  Embedding:   {} ({}D)", 
+                if h_status.embedding_http { "✅ BGE-M3" } else { "🔧 Hash" },
+                h_status.embedding_dim
+            );
+            println!("  Dream Journal: {}", if dream.has_journal() { "✅ Connected" } else { "❌ Offline" });
+            println!();
+            println!("Collections:");
+            println!("  📦 Hippocampus: {} memories", hippocampus.count());
+            println!("  🧬 Neocortex:   {} concepts", neocortex.count());
+            println!("  🌙 Dream:       {} processed", dream.total_processed());
+            println!("═══════════════════════════════════════════");
+        }
+
+        Some("help") | None => {
+            println!("🧠 CLS Memory Actor - Complementary Learning System\n");
+            println!("Usage: memory-brain actor <command> [args]\n");
+            println!("Commands:");
+            println!("  store <text> [--tags t1,t2]  Store episodic memory");
+            println!("  recall <query> [-n N]        Recall similar memories");
+            println!("  dream                        Run consolidation");
+            println!("  concepts [query]             List/search semantic concepts");
+            println!("  status                       Show system status");
+            println!();
+            println!("Examples:");
+            println!("  memory-brain actor store 'Rust is awesome' --tags rust,lang");
+            println!("  memory-brain actor recall 'programming language'");
+            println!("  memory-brain actor dream");
+        }
+
+        Some(cmd) => {
+            eprintln!("❌ Unknown actor command: {}", cmd);
+            eprintln!("Run 'memory-brain actor help' for usage");
+        }
+    }
+
     Ok(())
 }
