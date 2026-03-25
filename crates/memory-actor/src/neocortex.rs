@@ -4,12 +4,18 @@
 //! - Slow consolidation of semantic knowledge
 //! - Pattern extraction and generalization
 //! - Low plasticity, robust representations
+//!
+//! ## Phase 3: CoreVecDB Integration
+//! 
+//! Concepts are stored in CoreVecDB for semantic search across knowledge.
 
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use tracing::{info, debug};
+use tracing::{info, debug, warn};
 
 use crate::messages::*;
+use crate::embedding::{EmbeddingClient, HashEmbedder, EMBEDDING_DIM};
+// CoreVecDB storage imported from storage module
 
 /// A semantic concept/knowledge unit
 #[derive(Debug, Clone)]
@@ -25,6 +31,8 @@ pub struct Concept {
     pub updated_at: DateTime<Utc>,
     /// How well established this concept is (0.0 - 1.0)
     pub consolidation_level: f32,
+    /// Embedding vector (optional)
+    pub embedding: Option<Vec<f32>>,
 }
 
 impl Concept {
@@ -39,6 +47,7 @@ impl Concept {
             created_at: now,
             updated_at: now,
             consolidation_level: 0.1, // Starts weak
+            embedding: None,
         }
     }
 }
@@ -50,6 +59,12 @@ pub struct NeocortexConfig {
     pub association_threshold: f32,
     /// Rate at which concepts consolidate
     pub consolidation_rate: f32,
+    /// CoreVecDB URL (None = in-memory only)
+    pub vecdb_url: Option<String>,
+    /// Embedding server URL (None = use hash embedder)
+    pub embedding_url: Option<String>,
+    /// Collection name for concepts
+    pub collection: String,
 }
 
 impl Default for NeocortexConfig {
@@ -57,6 +72,160 @@ impl Default for NeocortexConfig {
         Self {
             association_threshold: 0.3,
             consolidation_rate: 0.05,
+            vecdb_url: None,
+            embedding_url: None,
+            collection: "concepts".to_string(),
+        }
+    }
+}
+
+impl NeocortexConfig {
+    /// Create config with external backends enabled
+    pub fn with_backends() -> Self {
+        Self {
+            vecdb_url: Some("http://localhost:3100".to_string()),
+            embedding_url: Some("http://localhost:3201".to_string()),
+            ..Default::default()
+        }
+    }
+}
+
+/// CoreVecDB storage for concepts
+struct ConceptStorage {
+    base_url: String,
+    collection: String,
+}
+
+impl ConceptStorage {
+    fn new(base_url: &str, collection: &str) -> Result<Self, String> {
+        let storage = Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            collection: collection.to_string(),
+        };
+        storage.ensure_collection()?;
+        Ok(storage)
+    }
+
+    fn ensure_collection(&self) -> Result<(), String> {
+        let url = format!("{}/collections/{}", self.base_url, self.collection);
+
+        match ureq::get(&url).call() {
+            Ok(resp) if resp.status() == 200 => Ok(()),
+            _ => {
+                let req = serde_json::json!({
+                    "name": self.collection,
+                    "dim": EMBEDDING_DIM,
+                    "distance": "cosine",
+                    "indexed_fields": ["name"],
+                    "numeric_fields": ["consolidation_level", "created_at"]
+                });
+
+                match ureq::post(&format!("{}/collections", self.base_url)).send_json(&req) {
+                    Ok(_) => {
+                        info!("Created concepts collection: {}", self.collection);
+                        Ok(())
+                    }
+                    Err(ureq::Error::Status(409, _)) => Ok(()),
+                    Err(e) => Err(format!("Failed to create collection: {}", e)),
+                }
+            }
+        }
+    }
+
+    fn store(&self, concept: &Concept, embedding: &[f32]) -> Result<u64, String> {
+        let mut metadata = HashMap::new();
+        metadata.insert("id".to_string(), concept.id.clone());
+        metadata.insert("name".to_string(), concept.name.clone());
+        metadata.insert("description".to_string(), concept.description.clone());
+        metadata.insert("consolidation_level".to_string(), concept.consolidation_level.to_string());
+        metadata.insert("created_at".to_string(), concept.created_at.timestamp_millis().to_string());
+
+        // Store source memories as comma-separated
+        if !concept.source_memories.is_empty() {
+            let sources: Vec<String> = concept.source_memories.iter().map(|id| id.to_string()).collect();
+            metadata.insert("source_memories".to_string(), sources.join(","));
+        }
+
+        let req = serde_json::json!({
+            "vectors": [{
+                "vector": embedding,
+                "metadata": metadata
+            }]
+        });
+
+        let url = format!("{}/collections/{}/upsert_batch", self.base_url, self.collection);
+        let resp = ureq::post(&url)
+            .send_json(&req)
+            .map_err(|e| format!("HTTP error: {}", e))?;
+
+        if resp.status() == 200 {
+            #[derive(serde::Deserialize)]
+            struct UpsertResp { start_id: u64 }
+            let result: UpsertResp = resp.into_json().map_err(|e| format!("JSON error: {}", e))?;
+            debug!("Stored concept {} -> vec_id {}", concept.name, result.start_id);
+            Ok(result.start_id)
+        } else {
+            Err(format!("Store failed: status {}", resp.status()))
+        }
+    }
+
+    fn search(&self, query_embedding: &[f32], k: usize) -> Result<Vec<(String, f32)>, String> {
+        let req = serde_json::json!({
+            "vector": query_embedding,
+            "k": k,
+            "include_metadata": true
+        });
+
+        let url = format!("{}/collections/{}/search", self.base_url, self.collection);
+        let resp = ureq::post(&url)
+            .send_json(&req)
+            .map_err(|e| format!("HTTP error: {}", e))?;
+
+        if resp.status() != 200 {
+            return Err(format!("Search failed: status {}", resp.status()));
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SearchResult {
+            score: f32,
+            metadata: Option<HashMap<String, String>>,
+        }
+        #[derive(serde::Deserialize)]
+        struct SearchResp {
+            results: Vec<SearchResult>,
+        }
+
+        let search_resp: SearchResp = resp.into_json().map_err(|e| format!("JSON error: {}", e))?;
+
+        let results = search_resp.results
+            .into_iter()
+            .filter_map(|r| {
+                r.metadata.and_then(|m| {
+                    m.get("name").map(|name| (name.clone(), r.score))
+                })
+            })
+            .collect();
+
+        Ok(results)
+    }
+}
+
+/// Embedding backend
+enum EmbedderBackend {
+    Http(EmbeddingClient),
+    Hash(HashEmbedder),
+}
+
+impl EmbedderBackend {
+    fn embed(&self, text: &str) -> Vec<f32> {
+        match self {
+            EmbedderBackend::Http(client) => {
+                client.embed(text).unwrap_or_else(|e| {
+                    warn!("HTTP embedding failed: {}", e);
+                    HashEmbedder::new(EMBEDDING_DIM).embed(text)
+                })
+            }
+            EmbedderBackend::Hash(hasher) => hasher.embed(text),
         }
     }
 }
@@ -68,27 +237,73 @@ pub struct NeocortexActor {
     concepts: HashMap<String, Concept>,
     /// Index by name for quick lookup
     name_index: HashMap<String, String>, // name -> id
+    /// Vector storage backend (optional)
+    storage: Option<ConceptStorage>,
+    /// Embedding backend
+    embedder: EmbedderBackend,
 }
 
 impl NeocortexActor {
     pub fn new(config: NeocortexConfig) -> Self {
+        // Initialize embedding backend
+        let embedder = if let Some(ref url) = config.embedding_url {
+            let client = EmbeddingClient::new(url);
+            if client.health_check() {
+                info!("✅ Neocortex connected to embedding server: {}", url);
+                EmbedderBackend::Http(client)
+            } else {
+                warn!("⚠️ Embedding server not available for neocortex");
+                EmbedderBackend::Hash(HashEmbedder::new(EMBEDDING_DIM))
+            }
+        } else {
+            EmbedderBackend::Hash(HashEmbedder::new(128))
+        };
+
+        // Initialize concept storage
+        let storage = if let Some(ref url) = config.vecdb_url {
+            match ConceptStorage::new(url, &config.collection) {
+                Ok(s) => {
+                    info!("✅ Neocortex connected to CoreVecDB: {}", url);
+                    Some(s)
+                }
+                Err(e) => {
+                    warn!("⚠️ CoreVecDB not available for neocortex: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             config,
             concepts: HashMap::new(),
             name_index: HashMap::new(),
+            storage,
+            embedder,
         }
     }
 
+    /// Create with external backends (convenience)
+    pub fn with_backends() -> Self {
+        Self::new(NeocortexConfig::with_backends())
+    }
+
     /// Find associations between memories based on content similarity
-    /// Returns pairs of (memory_id, memory_id, similarity_score)
     pub fn associate(&self, memories: &[Memory]) -> Vec<(MemoryId, MemoryId, f32)> {
         let mut associations = Vec::new();
         
-        // Simple word overlap similarity for now
-        // TODO: Use embeddings for real semantic similarity
+        // Use embeddings if available
         for i in 0..memories.len() {
             for j in (i + 1)..memories.len() {
-                let sim = self.compute_similarity(&memories[i], &memories[j]);
+                let sim = if let (Some(emb_a), Some(emb_b)) = 
+                    (&memories[i].embedding, &memories[j].embedding) 
+                {
+                    EmbeddingClient::cosine_similarity(emb_a, emb_b)
+                } else {
+                    self.compute_word_similarity(&memories[i], &memories[j])
+                };
+                
                 if sim >= self.config.association_threshold {
                     associations.push((memories[i].id, memories[j].id, sim));
                 }
@@ -100,9 +315,8 @@ impl NeocortexActor {
         associations
     }
 
-    /// Compute similarity between two memories
-    fn compute_similarity(&self, a: &Memory, b: &Memory) -> f32 {
-        // Simple Jaccard similarity on words
+    /// Compute word-based similarity (fallback)
+    fn compute_word_similarity(&self, a: &Memory, b: &Memory) -> f32 {
         let words_a: std::collections::HashSet<_> = a.content
             .to_lowercase()
             .split_whitespace()
@@ -117,24 +331,18 @@ impl NeocortexActor {
         let intersection = words_a.intersection(&words_b).count();
         let union = words_a.union(&words_b).count();
         
-        if union == 0 {
-            0.0
-        } else {
-            intersection as f32 / union as f32
-        }
+        if union == 0 { 0.0 } else { intersection as f32 / union as f32 }
     }
 
     /// Extract patterns from a set of memories
-    /// Returns common themes/keywords
     pub fn extract_patterns(&self, memories: &[Memory]) -> Vec<String> {
         let mut word_counts: HashMap<String, usize> = HashMap::new();
         
-        // Count word frequencies across all memories
         for memory in memories {
             let words: std::collections::HashSet<_> = memory.content
                 .to_lowercase()
                 .split_whitespace()
-                .filter(|w| w.len() > 3) // Skip short words
+                .filter(|w| w.len() > 3)
                 .map(|s| s.to_string())
                 .collect();
             
@@ -143,7 +351,6 @@ impl NeocortexActor {
             }
         }
         
-        // Find words that appear in multiple memories
         let threshold = (memories.len() / 2).max(2);
         let mut patterns: Vec<_> = word_counts
             .into_iter()
@@ -152,14 +359,7 @@ impl NeocortexActor {
         
         patterns.sort_by(|a, b| b.1.cmp(&a.1));
         
-        let result: Vec<String> = patterns.into_iter()
-            .take(10)
-            .map(|(word, _)| word)
-            .collect();
-        
-        debug!("Extracted {} patterns from {} memories", 
-               result.len(), memories.len());
-        result
+        patterns.into_iter().take(10).map(|(word, _)| word).collect()
     }
 
     /// Generalize from specific memories to a concept
@@ -168,13 +368,11 @@ impl NeocortexActor {
             return None;
         }
         
-        // Extract patterns to form concept description
         let patterns = self.extract_patterns(memories);
         if patterns.is_empty() {
             return None;
         }
         
-        // Create concept name from top patterns
         let concept_name = patterns.iter()
             .take(3)
             .cloned()
@@ -188,11 +386,22 @@ impl NeocortexActor {
         );
         
         let source_ids: Vec<MemoryId> = memories.iter().map(|m| m.id).collect();
-        let concept = Concept::new(concept_name.clone(), description, source_ids);
+        let mut concept = Concept::new(concept_name.clone(), description.clone(), source_ids);
+        
+        // Generate embedding for the concept
+        let embedding = self.embedder.embed(&description);
+        concept.embedding = Some(embedding.clone());
+        
+        // Store in CoreVecDB if available
+        if let Some(ref storage) = self.storage {
+            if let Err(e) = storage.store(&concept, &embedding) {
+                warn!("Failed to store concept in CoreVecDB: {}", e);
+            }
+        }
         
         let id = concept.id.clone();
         self.name_index.insert(concept_name.clone(), id.clone());
-        self.concepts.insert(id.clone(), concept);
+        self.concepts.insert(id, concept);
         
         info!("Generalized concept: {}", concept_name);
         Some(concept_name)
@@ -205,6 +414,24 @@ impl NeocortexActor {
             .and_then(|id| self.concepts.get(id))
     }
 
+    /// Semantic search for related concepts
+    pub fn search_concepts(&self, query: &str, k: usize) -> Vec<(String, f32)> {
+        if let Some(ref storage) = self.storage {
+            let query_embedding = self.embedder.embed(query);
+            match storage.search(&query_embedding, k) {
+                Ok(results) => return results,
+                Err(e) => warn!("Concept search failed: {}", e),
+            }
+        }
+        
+        // Fallback: simple name matching
+        self.concepts.values()
+            .filter(|c| c.name.contains(query) || c.description.contains(query))
+            .take(k)
+            .map(|c| (c.name.clone(), 0.5))
+            .collect()
+    }
+
     /// Store consolidated knowledge
     pub fn store_knowledge(
         &mut self,
@@ -212,9 +439,20 @@ impl NeocortexActor {
         description: String,
         source_memories: Vec<MemoryId>,
     ) -> String {
-        let concept = Concept::new(concept_name.clone(), description, source_memories);
-        let id = concept.id.clone();
+        let mut concept = Concept::new(concept_name.clone(), description.clone(), source_memories);
         
+        // Generate embedding
+        let embedding = self.embedder.embed(&description);
+        concept.embedding = Some(embedding.clone());
+        
+        // Store in CoreVecDB
+        if let Some(ref storage) = self.storage {
+            if let Err(e) = storage.store(&concept, &embedding) {
+                warn!("Failed to store knowledge in CoreVecDB: {}", e);
+            }
+        }
+        
+        let id = concept.id.clone();
         self.name_index.insert(concept_name.clone(), id.clone());
         self.concepts.insert(id.clone(), concept);
         
@@ -225,8 +463,7 @@ impl NeocortexActor {
     /// Strengthen a concept (called during consolidation)
     pub fn strengthen(&mut self, concept_id: &str, delta: f32) {
         if let Some(concept) = self.concepts.get_mut(concept_id) {
-            concept.consolidation_level = 
-                (concept.consolidation_level + delta).min(1.0);
+            concept.consolidation_level = (concept.consolidation_level + delta).min(1.0);
             concept.updated_at = Utc::now();
         }
     }
@@ -234,10 +471,7 @@ impl NeocortexActor {
     /// Add relation between concepts
     pub fn add_relation(&mut self, from_id: &str, to_id: &str, strength: f32) {
         if let Some(concept) = self.concepts.get_mut(from_id) {
-            // Update existing or add new
-            if let Some(rel) = concept.relations.iter_mut()
-                .find(|(id, _)| id == to_id) 
-            {
+            if let Some(rel) = concept.relations.iter_mut().find(|(id, _)| id == to_id) {
                 rel.1 = (rel.1 + strength).min(1.0);
             } else {
                 concept.relations.push((to_id.to_string(), strength));
@@ -255,11 +489,15 @@ impl NeocortexActor {
         self.concepts.len()
     }
 
+    /// Check if external backends are connected
+    pub fn has_backends(&self) -> bool {
+        self.storage.is_some()
+    }
+
     /// Process a message and return response
     pub fn handle(&mut self, msg: NeocortexMessage, memories: &[Memory]) -> NeocortexResponse {
         match msg {
             NeocortexMessage::Associate { memory_ids: _ } => {
-                // Use provided memories for association
                 let links = self.associate(memories);
                 NeocortexResponse::Associations { links }
             }
@@ -297,7 +535,6 @@ mod tests {
 
     #[test]
     fn test_association() {
-        // Use lower threshold for testing
         let config = NeocortexConfig {
             association_threshold: 0.1,
             ..Default::default()
@@ -311,9 +548,7 @@ mod tests {
         ];
         
         let associations = actor.associate(&memories);
-        
-        // Rust memories should be associated (share "Rust" and "programming")
-        assert!(!associations.is_empty(), "Expected associations between similar memories");
+        assert!(!associations.is_empty());
     }
 
     #[test]
@@ -327,8 +562,6 @@ mod tests {
         ];
         
         let patterns = actor.extract_patterns(&memories);
-        
-        // "rust" should be a common pattern
         assert!(patterns.iter().any(|p| p == "rust"));
     }
 
@@ -345,10 +578,12 @@ mod tests {
         let concept = actor.generalize(&memories);
         assert!(concept.is_some());
         
-        // Should be able to query the concept
         let concept_name = concept.unwrap();
         let queried = actor.query(&concept_name);
         assert!(queried.is_some());
+        
+        // Check embedding was generated
+        assert!(queried.unwrap().embedding.is_some());
     }
 
     #[test]
