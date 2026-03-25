@@ -16,6 +16,9 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 async-trait = "0.1"
 
+# HTTP client for CoreVecDB + Embedding Server
+ureq = { version = "2", features = ["json"] }
+
 # Memory-brain core (옵션)
 # memory-brain = { path = "../.." }
 

@@ -63,9 +63,17 @@ pub mod neocortex;
 pub mod dream;
 pub mod guardian;
 
+// Phase 2: External backends
+pub mod embedding;
+pub mod storage;
+
 // Re-exports
 pub use messages::*;
 pub use hippocampus::{HippocampusActor, HippocampusConfig};
 pub use neocortex::{NeocortexActor, NeocortexConfig, Concept};
 pub use dream::{DreamActor, DreamConfig, ConsolidationStats};
 pub use guardian::{MemoryGuardian, MemorySystemConfig, MemorySystemStats};
+
+// Phase 2 re-exports
+pub use embedding::{EmbeddingClient, HashEmbedder, Embedder, EMBEDDING_DIM};
+pub use storage::{VecDbStorage, MemorySearchResult, VecDbStats};

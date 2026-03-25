@@ -4,12 +4,20 @@
 //! - Fast storage of new experiences
 //! - High plasticity
 //! - Episodic memory with temporal context
+//!
+//! ## Phase 2: External Backends
+//! 
+//! Now supports:
+//! - CoreVecDB for vector storage (localhost:3100)
+//! - BGE-M3 for embeddings (localhost:3201)
 
 use std::collections::{HashMap, VecDeque};
 use chrono::Utc;
-use tracing::{info, debug};
+use tracing::{info, debug, warn};
 
 use crate::messages::*;
+use crate::embedding::{EmbeddingClient, HashEmbedder, EMBEDDING_DIM};
+use crate::storage::VecDbStorage;
 
 /// Configuration for HippocampusActor
 #[derive(Debug, Clone)]
@@ -20,6 +28,12 @@ pub struct HippocampusConfig {
     pub default_decay_rate: f32,
     /// Minimum strength before memory is forgotten
     pub min_strength: f32,
+    /// CoreVecDB URL (None = in-memory only)
+    pub vecdb_url: Option<String>,
+    /// Embedding server URL (None = use hash embedder)
+    pub embedding_url: Option<String>,
+    /// Collection name for CoreVecDB
+    pub collection: String,
 }
 
 impl Default for HippocampusConfig {
@@ -28,6 +42,47 @@ impl Default for HippocampusConfig {
             working_memory_size: 100,
             default_decay_rate: 0.1,
             min_strength: 0.01,
+            vecdb_url: None,
+            embedding_url: None,
+            collection: "memory_actor".to_string(),
+        }
+    }
+}
+
+impl HippocampusConfig {
+    /// Create config with external backends enabled
+    pub fn with_backends() -> Self {
+        Self {
+            vecdb_url: Some("http://localhost:3100".to_string()),
+            embedding_url: Some("http://localhost:3201".to_string()),
+            ..Default::default()
+        }
+    }
+}
+
+/// Embedding backend (HTTP or Hash fallback)
+enum EmbedderBackend {
+    Http(EmbeddingClient),
+    Hash(HashEmbedder),
+}
+
+impl EmbedderBackend {
+    fn embed(&self, text: &str) -> Vec<f32> {
+        match self {
+            EmbedderBackend::Http(client) => {
+                client.embed(text).unwrap_or_else(|e| {
+                    warn!("HTTP embedding failed: {}, using hash fallback", e);
+                    HashEmbedder::new(EMBEDDING_DIM).embed(text)
+                })
+            }
+            EmbedderBackend::Hash(hasher) => hasher.embed(text),
+        }
+    }
+
+    fn dimension(&self) -> usize {
+        match self {
+            EmbedderBackend::Http(_) => EMBEDDING_DIM,
+            EmbedderBackend::Hash(h) => h.dimension,
         }
     }
 }
@@ -35,28 +90,81 @@ impl Default for HippocampusConfig {
 /// HippocampusActor - manages fast episodic memory
 pub struct HippocampusActor {
     config: HippocampusConfig,
-    /// All stored memories
+    /// In-memory storage (always available)
     memories: HashMap<MemoryId, Memory>,
     /// Recent memories (working memory) - FIFO queue
     working_memory: VecDeque<MemoryId>,
-    // TODO: embedding_client: Option<EmbeddingClient>,
+    /// Vector storage backend (optional)
+    vecdb: Option<VecDbStorage>,
+    /// Embedding backend
+    embedder: EmbedderBackend,
 }
 
 impl HippocampusActor {
+    /// Create a new HippocampusActor
     pub fn new(config: HippocampusConfig) -> Self {
+        // Initialize embedding backend
+        let embedder = if let Some(ref url) = config.embedding_url {
+            let client = EmbeddingClient::new(url);
+            if client.health_check() {
+                info!("✅ Connected to embedding server: {}", url);
+                EmbedderBackend::Http(client)
+            } else {
+                warn!("⚠️ Embedding server not available, using hash fallback");
+                EmbedderBackend::Hash(HashEmbedder::new(EMBEDDING_DIM))
+            }
+        } else {
+            EmbedderBackend::Hash(HashEmbedder::new(128))
+        };
+
+        // Initialize vector storage backend
+        let vecdb = if let Some(ref url) = config.vecdb_url {
+            match VecDbStorage::new(url, &config.collection) {
+                Ok(storage) => {
+                    info!("✅ Connected to CoreVecDB: {}", url);
+                    Some(storage)
+                }
+                Err(e) => {
+                    warn!("⚠️ CoreVecDB not available: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             config,
             memories: HashMap::new(),
             working_memory: VecDeque::new(),
+            vecdb,
+            embedder,
         }
+    }
+
+    /// Create with external backends (convenience)
+    pub fn with_backends() -> Self {
+        Self::new(HippocampusConfig::with_backends())
     }
 
     /// Store a new memory
     pub fn store(&mut self, content: String, context: MemoryContext) -> MemoryId {
-        let memory = Memory::new(content, context);
+        // Generate embedding
+        let embedding = self.embedder.embed(&content);
+        
+        let mut memory = Memory::new(content, context);
+        memory.embedding = Some(embedding.clone());
         let id = memory.id;
         
-        // Add to main storage
+        // Store in CoreVecDB if available
+        if let Some(ref vecdb) = self.vecdb {
+            match vecdb.store(&memory, &embedding) {
+                Ok(vec_id) => debug!("Stored in CoreVecDB: vec_id={}", vec_id),
+                Err(e) => warn!("Failed to store in CoreVecDB: {}", e),
+            }
+        }
+        
+        // Always store in-memory for fast access
         self.memories.insert(id, memory);
         
         // Add to working memory
@@ -70,26 +178,67 @@ impl HippocampusActor {
     }
 
     /// Recall memories by semantic similarity
-    /// NOTE: This is a simplified version. Real implementation needs embeddings.
     pub fn recall(&mut self, query: &str, k: usize) -> Vec<RecallResult> {
-        // Simple keyword matching for now
-        // TODO: Use embedding similarity with CoreVecDB
-        let query_lower = query.to_lowercase();
+        // Generate query embedding
+        let query_embedding = self.embedder.embed(query);
         
+        // Try CoreVecDB first (proper vector search)
+        if let Some(ref vecdb) = self.vecdb {
+            match vecdb.search(&query_embedding, k) {
+                Ok(results) => {
+                    let recall_results: Vec<RecallResult> = results
+                        .into_iter()
+                        .map(|r| {
+                            // Update access info in local cache
+                            if let Some(mem) = self.memories.get_mut(&r.memory.id) {
+                                mem.access_count += 1;
+                                mem.last_accessed = Utc::now();
+                                mem.strength = (mem.strength + 0.1).min(1.0);
+                            }
+                            
+                            RecallResult {
+                                memory: r.memory,
+                                similarity: r.score,
+                            }
+                        })
+                        .collect();
+                    
+                    debug!("CoreVecDB returned {} results for: {}", recall_results.len(), query);
+                    return recall_results;
+                }
+                Err(e) => {
+                    warn!("CoreVecDB search failed: {}, falling back to in-memory", e);
+                }
+            }
+        }
+        
+        // Fallback: in-memory search with cosine similarity
+        self.recall_inmemory(query, &query_embedding, k)
+    }
+
+    /// In-memory recall using cosine similarity
+    fn recall_inmemory(&mut self, query: &str, query_embedding: &[f32], k: usize) -> Vec<RecallResult> {
         let mut results: Vec<RecallResult> = self.memories
             .values_mut()
             .filter_map(|memory| {
-                let content_lower = memory.content.to_lowercase();
-                if content_lower.contains(&query_lower) {
+                let similarity = if let Some(ref mem_emb) = memory.embedding {
+                    EmbeddingClient::cosine_similarity(query_embedding, mem_emb)
+                } else {
+                    // Keyword fallback
+                    let query_lower = query.to_lowercase();
+                    let content_lower = memory.content.to_lowercase();
+                    if content_lower.contains(&query_lower) { 0.5 } else { 0.0 }
+                };
+                
+                if similarity > 0.1 {
                     // Update access info
                     memory.access_count += 1;
                     memory.last_accessed = Utc::now();
-                    // Reinforce on access
                     memory.strength = (memory.strength + 0.1).min(1.0);
                     
                     Some(RecallResult {
                         memory: memory.clone(),
-                        similarity: 1.0, // TODO: Real similarity
+                        similarity,
                     })
                 } else {
                     None
@@ -97,15 +246,15 @@ impl HippocampusActor {
             })
             .collect();
         
-        // Sort by strength * similarity
+        // Sort by similarity * strength
         results.sort_by(|a, b| {
             let score_a = a.similarity * a.memory.strength;
             let score_b = b.similarity * b.memory.strength;
-            score_b.partial_cmp(&score_a).unwrap()
+            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
         });
         
         results.truncate(k);
-        debug!("Recalled {} memories for query: {}", results.len(), query);
+        debug!("In-memory recalled {} memories for query: {}", results.len(), query);
         results
     }
 
@@ -189,6 +338,20 @@ impl HippocampusActor {
         self.memories.len()
     }
 
+    /// Check if external backends are connected
+    pub fn has_backends(&self) -> bool {
+        self.vecdb.is_some()
+    }
+
+    /// Get backend status
+    pub fn backend_status(&self) -> BackendStatus {
+        BackendStatus {
+            vecdb_connected: self.vecdb.as_ref().map(|v| v.health_check()).unwrap_or(false),
+            embedding_http: matches!(self.embedder, EmbedderBackend::Http(_)),
+            embedding_dim: self.embedder.dimension(),
+        }
+    }
+
     /// Process a message and return response
     pub fn handle(&mut self, msg: HippocampusMessage) -> HippocampusResponse {
         match msg {
@@ -233,6 +396,14 @@ impl HippocampusActor {
     }
 }
 
+/// Backend connection status
+#[derive(Debug, Clone)]
+pub struct BackendStatus {
+    pub vecdb_connected: bool,
+    pub embedding_http: bool,
+    pub embedding_dim: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,6 +418,10 @@ mod tests {
         );
         
         assert!(actor.get(&id).is_some());
+        
+        // Check embedding was generated
+        let memory = actor.get(&id).unwrap();
+        assert!(memory.embedding.is_some());
         
         let results = actor.recall("Rust", 5);
         assert_eq!(results.len(), 1);
@@ -300,5 +475,15 @@ mod tests {
         
         let new_strength = actor.reinforce(&id, 0.3);
         assert_eq!(new_strength, Some(0.8));
+    }
+
+    #[test]
+    fn test_backend_status() {
+        let actor = HippocampusActor::new(HippocampusConfig::default());
+        let status = actor.backend_status();
+        
+        // Default config = no external backends
+        assert!(!status.vecdb_connected);
+        assert!(!status.embedding_http);
     }
 }
