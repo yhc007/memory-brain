@@ -5,6 +5,7 @@
 use memory_actor::{
     HippocampusActor, HippocampusConfig, 
     NeocortexActor, NeocortexConfig,
+    DreamActor, DreamConfig,
     MemoryContext, Memory,
 };
 
@@ -124,6 +125,34 @@ fn main() {
     println!("\n📊 Neocortex count: {}", neocortex.count());
 
     // =========================================================================
+    // 3. Dream (Consolidation)
+    // =========================================================================
+    println!("\n═══════════════════════════════════════════════════════════════");
+    println!("🌙 DREAM (Consolidation)");
+    println!("═══════════════════════════════════════════════════════════════");
+    
+    let mut dream = DreamActor::new(DreamConfig::with_backends());
+    
+    println!("\n📊 Dream Journal: {}", if dream.has_journal() { "CoreVecDB ✅" } else { "In-memory 🔧" });
+
+    // Run consolidation
+    println!("\n💤 Running dream consolidation...");
+    let stats = dream.consolidate(&mut hippocampus, &mut neocortex);
+    
+    println!("  Memories processed: {}", stats.memories_processed);
+    println!("  Memories replayed: {}", stats.memories_replayed);
+    println!("  Memories pruned: {}", stats.memories_pruned);
+    println!("  Concepts created: {}", stats.concepts_created);
+    println!("  Associations found: {}", stats.associations_found);
+    
+    if !stats.insights.is_empty() {
+        println!("\n💡 Insights:");
+        for insight in &stats.insights {
+            println!("  - {}", insight);
+        }
+    }
+
+    // =========================================================================
     // Summary
     // =========================================================================
     println!("\n═══════════════════════════════════════════════════════════════");
@@ -131,6 +160,7 @@ fn main() {
     println!("═══════════════════════════════════════════════════════════════");
     println!("  Hippocampus: {} episodic memories", hippocampus.count());
     println!("  Neocortex: {} semantic concepts", neocortex.count());
+    println!("  Dream: {} total processed", dream.total_processed());
     println!("\n🧠 CLS Memory System ready!");
 }
 
