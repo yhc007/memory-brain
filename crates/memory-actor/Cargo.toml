@@ -6,7 +6,7 @@ description = "CLS-based memory system using Pekko Actor"
 authors = ["Paul Yu <paul.yu@coreon.ai>"]
 
 [dependencies]
-pekko-actor = { path = "/Users/paulyu/workRust/rust-pekko/pekko-actor" }
+pekko-actor = { path = "../../../pekko-actor" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

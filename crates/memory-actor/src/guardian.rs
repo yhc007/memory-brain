@@ -113,6 +113,16 @@ impl MemoryGuardian {
         self.neocortex.query(concept).map(|c| c.description.clone())
     }
 
+    /// Get all memories (for persistence).
+    pub fn all_memories(&self) -> Vec<Memory> {
+        self.hippocampus.all_memories()
+    }
+
+    /// Restore a memory directly into the hippocampus (for loading from disk).
+    pub fn restore_memory(&mut self, memory: Memory) {
+        self.hippocampus.restore(memory);
+    }
+
     /// Get recent memories (working memory)
     pub fn recent(&self, limit: usize) -> Vec<Memory> {
         self.hippocampus.get_recent(limit)

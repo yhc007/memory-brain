@@ -333,6 +333,16 @@ impl HippocampusActor {
         self.memories.values().cloned().collect()
     }
 
+    /// Restore a memory from disk (skips embedding generation).
+    pub fn restore(&mut self, memory: Memory) {
+        let id = memory.id;
+        self.memories.insert(id, memory);
+        self.working_memory.push_back(id);
+        if self.working_memory.len() > self.config.working_memory_size {
+            self.working_memory.pop_front();
+        }
+    }
+
     /// Get memory count
     pub fn count(&self) -> usize {
         self.memories.len()
